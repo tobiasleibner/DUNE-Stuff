@@ -325,6 +325,158 @@ private:
 }; // class Expression< ..., 1 >
 
 
+template< class EntityImp, class DomainFieldImp, size_t domainDim, class RangeFieldImp, size_t rangeDim, size_t rangeDimCols, class TimeFieldImp = double >
+class TimeDependentExpression
+{
+  typedef TimeDependentExpression< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, rangeDimCols, TimeFieldImp > ThisType;
+
+public:
+  typedef Expression< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, rangeDimCols > ExpressionFunctionType;
+  typedef EntityImp         EntityType;
+  typedef DomainFieldImp    DomainFieldType;
+  static const size_t                   dimDomain = domainDim;
+  typedef typename ExpressionFunctionType::DomainType DomainType;
+  typedef RangeFieldImp                 RangeFieldType;
+  static const size_t                   dimRange = rangeDim;
+  typedef typename ExpressionFunctionType::RangeType  RangeType;
+  static const size_t                   dimRangeCols = rangeDimCols;
+  typedef TimeFieldImp                       TimeFieldType;
+
+  typedef typename ExpressionFunctionType::JacobianRangeType JacobianRangeType;
+
+  static std::string static_id()
+  {
+    return ExpressionFunctionType::static_id() + ".timedependentexpression";
+  }
+
+  static Common::Configuration default_config(const std::string sub_name = "")
+  {
+    Common::Configuration config;
+    config["variable"] = "x";
+    config["expression"] = "[t*x[0] sin(t*x[0]) exp(t+x[0])]";
+    config["order"] = "3";
+    config["name"] = static_id();
+    if (sub_name.empty())
+      return config;
+    else {
+      Common::Configuration tmp;
+      tmp.add(config, sub_name);
+      return tmp;
+    }
+  } // ... default_config(...)
+
+  static std::unique_ptr< ThisType > create(const Common::Configuration config = default_config(), const std::string sub_name = static_id())
+  {
+    // get correct config
+    const Common::Configuration cfg = config.has_sub(sub_name) ? config.sub(sub_name) : config;
+    const Common::Configuration default_cfg = default_config();
+    // get gradient
+    std::vector< std::vector < std::string > > gradient_as_vectors;
+    if (cfg.has_key("gradient")) {
+      // get gradient as FieldMatrix
+      typedef typename Dune::FieldMatrix< std::string, dimRange, dimDomain > JacobianMatrixType;
+      const JacobianMatrixType gradient_as_matrix = cfg.get< JacobianMatrixType >("gradient");
+      // convert FieldMatrix to std::vector< std::vector < std::string > >
+      for (size_t rr = 0; rr < dimRange; ++rr) {
+        std::vector< std::string > gradient_expression;
+        for (size_t cc = 0; cc < dimDomain; ++cc)
+          gradient_expression.emplace_back(gradient_as_matrix[rr][cc]);
+        gradient_as_vectors.emplace_back(gradient_expression);
+      }
+    }
+    // create
+    return Common::make_unique< ThisType >(
+          cfg.get("variable",   default_cfg.get< std::string >("variable")),
+          cfg.get("expression", default_cfg.get< std::vector< std::string > >("expression")),
+          cfg.get("order",      default_cfg.get< size_t >("order")),
+          cfg.get("name",       default_cfg.get< std::string >("name")),
+          gradient_as_vectors);
+  } // ... create(...)
+
+  TimeDependentExpression(const std::string variable,
+                          const std::string expression,
+                          const size_t ord = default_config().get< size_t >("order"),
+                          const std::string nm = static_id(),
+                          const std::vector< std::vector< std::string > > gradient_expressions
+                          = std::vector< std::vector< std::string > >())
+    : variable_(variable)
+    , order_(ord)
+    , name_(nm)
+    , expressions_(DSC::fromString< std::vector< std::string > >(expression))
+    , gradient_expressions_(gradient_expressions)
+  {}
+
+  TimeDependentExpression(const std::string variable,
+             const std::vector< std::string > expressions,
+             const size_t ord = default_config().get< size_t >("order"),
+             const std::string nm = static_id(),
+             const std::vector< std::vector< std::string > > gradient_expressions
+                = std::vector< std::vector< std::string > >())
+    : variable_(variable)
+    , order_(ord)
+    , name_(nm)
+    , expressions_(expressions)
+    , gradient_expressions_(gradient_expressions)
+  {}
+
+  std::string name() const
+  {
+    return name_;
+  }
+
+  size_t order() const
+  {
+    return order_;
+  }
+
+  ExpressionFunctionType evaluate_at_time(const TimeFieldType t) const
+  {
+    std::vector< std::string > expressions_at_time_t(expressions_.size());
+    for (size_t ii = 0; ii < expressions_.size(); ++ii) {
+      expressions_at_time_t[ii] = expressions_[ii];
+      replaceAll(expressions_at_time_t[ii], "t", DSC::toString(t));
+    }
+    std::vector< std::vector< std::string > > gradients_at_time_t(gradient_expressions_.size());
+    for (size_t ii = 0; ii < gradient_expressions_.size(); ++ii) {
+      const auto gradient = gradient_expressions_[ii];
+      for (size_t jj = 0; jj < gradient.size(); ++jj) {
+        gradients_at_time_t[ii][jj] = gradient[jj];
+        replaceAll(gradients_at_time_t[ii][jj], "t", DSC::toString(t));
+      }
+    }
+    return ExpressionFunctionType(variable_, expressions_at_time_t, order_, name_, gradients_at_time_t);
+  }
+
+private:
+  // from https://stackoverflow.com/questions/2896600/how-to-replace-all-occurrences-of-a-character-in-string
+  void replaceAll( std::string& source, const std::string from, const std::string to ) const
+  {
+      std::string newString;
+      newString.reserve( source.length() );  // avoids a few memory allocations
+
+      std::string::size_type lastPos = 0;
+      std::string::size_type findPos;
+
+      while( std::string::npos != ( findPos = source.find( from, lastPos )))
+      {
+          newString.append( source, lastPos, findPos - lastPos );
+          newString += to;
+          lastPos = findPos + from.length();
+      }
+
+      // Care for the rest after last occurrence
+      newString += source.substr( lastPos );
+
+      source.swap( newString );
+  }
+  const std::string variable_;
+  size_t order_;
+  std::string name_;
+  const std::vector< std::string > expressions_;
+  std::vector< std::vector< std::string > > gradient_expressions_;
+}; // class Expression< ..., 1 >
+
+
 } // namespace Functions
 } // namespace Stuff
 } // namespace Dune
