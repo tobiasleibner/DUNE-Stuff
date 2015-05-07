@@ -17,6 +17,7 @@
 #include <dune/stuff/common/fvector.hh>
 
 #include "interfaces.hh"
+#include "expression.hh"
 
 namespace Dune {
 namespace Stuff {
@@ -216,6 +217,247 @@ private:
   std::shared_ptr< const std::vector< RangeType > > values_;
   std::string name_;
 }; // class Checkerboard
+
+
+template< class EntityImp, class DomainFieldImp, size_t domainDim,
+          class ExpressionEntityImp, class ExpressionDomainFieldImp, size_t expressionDomainDim,
+          class RangeFieldImp, size_t rangeDim, size_t rangeDimCols = 1 >
+class ExpressionCheckerboard
+  : public LocalizableFunctionInterface< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, rangeDimCols >
+{
+  typedef LocalizableFunctionInterface< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, rangeDimCols >
+    BaseType;
+  typedef ExpressionCheckerboard< EntityImp, DomainFieldImp, domainDim,
+                                  ExpressionEntityImp,
+                                  ExpressionDomainFieldImp, expressionDomainDim,
+                                  RangeFieldImp, rangeDim, rangeDimCols > ThisType;
+  typedef Expression< ExpressionEntityImp,
+                      ExpressionDomainFieldImp, expressionDomainDim,
+                      RangeFieldImp, rangeDim, rangeDimCols > ExpressionFunctionType;
+  typedef typename ExpressionFunctionType::LocalfunctionType ExpressionLocalfunctionType;
+
+  class Localfunction
+    : public LocalfunctionInterface< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, rangeDimCols >
+  {
+    typedef LocalfunctionInterface< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, rangeDimCols > BaseType;
+  public:
+    typedef typename BaseType::EntityType        EntityType;
+
+    typedef typename BaseType::DomainType        DomainType;
+    typedef typename BaseType::RangeFieldType    RangeFieldType;
+    typedef typename BaseType::RangeType         RangeType;
+    typedef typename BaseType::JacobianRangeType JacobianRangeType;
+    typedef          ExpressionFunctionType      ExpressionRangeType;
+
+    Localfunction(const EntityType& ent, const ExpressionFunctionType& value)
+      : BaseType(ent)
+      , value_(value)
+    {}
+
+    Localfunction(const Localfunction& /*other*/) = delete;
+
+    Localfunction& operator=(const Localfunction& /*other*/) = delete;
+
+    virtual size_t order() const override
+    {
+      return 10;
+    }
+
+    const ExpressionRangeType* evaluate_expression(const DomainType& xx) const
+    {
+      return &value_;
+    }
+
+    virtual void evaluate(const DomainType& xx, RangeType& ret) const
+    {
+      DUNE_THROW(Dune::NotImplemented, "Not implemented");
+    }
+
+    virtual void jacobian(const DomainType& xx, JacobianRangeType& ret) const override
+    {
+      DUNE_THROW(Dune::NotImplemented, "Not implemented");
+    }
+
+  private:
+    const ExpressionFunctionType& value_;
+  }; // class Localfunction
+
+public:
+  typedef typename BaseType::EntityType         EntityType;
+  typedef typename BaseType::LocalfunctionType  LocalfunctionType;
+
+  typedef typename BaseType::DomainFieldType  DomainFieldType;
+  static const size_t                         dimDomain = BaseType::dimDomain;
+
+  typedef typename BaseType::RangeFieldType RangeFieldType;
+  typedef typename BaseType::RangeType      RangeType;
+
+  static const bool available = true;
+
+  static std::string static_id()
+  {
+    return BaseType::static_id() + ".expressioncheckerboard";
+  }
+
+  static Common::Configuration default_config(const std::string sub_name = "")
+  {
+    Common::Configuration config;
+    config["lower_left"] = "[0.0 0.0 0.0]";
+    config["upper_right"] = "[1.0 1.0 1.0]";
+    config["num_elements"] = "[2 2 2]";
+    config["variable"] = "u";
+    config["values"] = "[1.0*u[0] 2.0*u[0] 3.0*sin(u[0]) 4.0 5.0 6.0*cos(u[0]) 7.0 8.0]";
+    config["values_are_vectors"] = "false";
+    config["name"] = static_id();
+    if (sub_name.empty())
+      return config;
+    else {
+      Common::Configuration tmp;
+      tmp.add(config, sub_name);
+      return tmp;
+    }
+  } // ... default_config(...)
+
+  static std::unique_ptr< ThisType > create(const Common::Configuration config = default_config(),
+                                            const std::string sub_name = static_id())
+  {
+    // get correct config
+    const Common::Configuration cfg = config.has_sub(sub_name) ? config.sub(sub_name) : config;
+    const Common::Configuration default_cfg = default_config();
+    // calculate number of values and get values
+    auto num_elements = cfg.get("num_elements",
+                                default_cfg.get< Common::FieldVector< size_t, dimDomain > >("num_elements"), dimDomain);
+    size_t num_values = 1;
+    for (size_t ii = 0; ii < num_elements.size(); ++ii)
+      num_values *= num_elements[ii];
+    std::vector< ExpressionFunctionType > values;
+    const std::string variable = cfg.get("variable",   default_cfg.get< std::string >("variable"));
+    const bool values_are_vectors = cfg.get("values_are_vectors", default_cfg.get< bool >("values_are_vectors"));
+    if (values_are_vectors) {
+      auto values_matrix = cfg.get("values", default_cfg.get< Dune::DynamicMatrix< std::string > >("values"), num_values, rangeDim);
+      for (size_t ii = 0; ii < num_values; ++ii) {
+        // get row
+        const auto& row = values_matrix[ii];
+        std::vector< std::string > std_row(rangeDim);
+        for (size_t jj = 0; jj < rangeDim; ++jj)
+          std_row[jj] = row[jj];
+        values.emplace_back(ExpressionFunctionType(variable, std_row));
+      }
+    } else {
+      auto values_rf = cfg.get("values", default_cfg.get< std::vector< std::string > >("values"), num_values);
+      for (size_t ii = 0; ii < values_rf.size(); ++ii)
+        values.emplace_back(ExpressionFunctionType(variable, values_rf[ii]));
+    }
+    // create
+    return Common::make_unique< ThisType >(
+            cfg.get("lower_left",
+                    default_cfg.get< Common::FieldVector< DomainFieldType, dimDomain > >("lower_left"), dimDomain),
+            cfg.get("upper_right",
+                    default_cfg.get< Common::FieldVector< DomainFieldType, dimDomain > >("upper_right"), dimDomain),
+            std::move(num_elements),
+            std::move(values),
+            cfg.get("name", default_cfg.get< std::string > ("name")));
+  } // ... create(...)
+
+  ExpressionCheckerboard(const Common::FieldVector< DomainFieldType, dimDomain >& lowerLeft,
+               const Common::FieldVector< DomainFieldType, dimDomain >& upperRight,
+               const Common::FieldVector< size_t, dimDomain >& numElements,
+               const std::vector< ExpressionFunctionType >& values,
+               const std::string nm = static_id())
+    : lowerLeft_(new Common::FieldVector< DomainFieldType, dimDomain >(lowerLeft))
+    , upperRight_(new Common::FieldVector< DomainFieldType, dimDomain >(upperRight))
+    , numElements_(new Common::FieldVector< size_t, dimDomain >(numElements))
+    , values_(new std::vector< ExpressionFunctionType >(values))
+    , name_(nm)
+  {
+    // checks
+    size_t totalSubdomains = 1;
+    for (size_t dd = 0; dd < dimDomain; ++dd) {
+      const auto& ll = (*lowerLeft_)[dd];
+      const auto& ur = (*upperRight_)[dd];
+      const auto& ne = (*numElements_)[dd];
+      if (!(ll < ur))
+        DUNE_THROW(Dune::RangeError, "lowerLeft has to be elementwise smaller than upperRight!");
+      totalSubdomains *= ne;
+    }
+    if (values_->size() < totalSubdomains)
+      DUNE_THROW(Dune::RangeError,
+                 "values too small (is " << values_->size() << ", should be " << totalSubdomains << ")");
+  } // Checkerboard(...)
+
+  ExpressionCheckerboard(const ThisType& other) = default;
+
+  ThisType& operator=(const ThisType& other) = delete;
+
+  ThisType& operator=(ThisType&& source) = delete;
+
+  virtual std::string type() const override
+  {
+    return BaseType::static_id() + ".expressioncheckerboard";
+  }
+
+  virtual std::string name() const override
+  {
+    return name_;
+  }
+
+  virtual std::unique_ptr< LocalfunctionType > local_function(const EntityType& entity) const override
+  {
+    // decide on the subdomain the center of the entity belongs to
+    const auto center = entity.geometry().center();
+    std::vector< size_t > whichPartition(dimDomain, 0);
+    const auto& ll = *lowerLeft_;
+    const auto& ur = *upperRight_;
+    const auto& ne = *numElements_;
+    for (size_t dd = 0; dd < dimDomain; ++dd) {
+      // for points that are on upperRight_[d], this selects one partition too much
+      // so we need to cap this
+      whichPartition[dd] = std::min(size_t(std::floor(ne[dd]*((center[dd] - ll[dd])/(ur[dd] - ll[dd])))),
+                                    ne[dd] - 1);
+    }
+    size_t subdomain = 0;
+    if (dimDomain == 1)
+      subdomain = whichPartition[0];
+    else if (dimDomain == 2)
+      subdomain = whichPartition[0] + whichPartition[1]*ne[0];
+    else
+      subdomain = whichPartition[0] + whichPartition[1]*ne[0] + whichPartition[2]*ne[1]*ne[0];
+    // return the component that belongs to the subdomain
+    return std::unique_ptr< Localfunction >(new Localfunction(entity, (*values_)[subdomain]));
+  } // ... local_function(...)
+
+  virtual std::unique_ptr< Localfunction > local_function_expression(const EntityType& entity) const
+  {
+    // decide on the subdomain the center of the entity belongs to
+    const auto center = entity.geometry().center();
+    std::vector< size_t > whichPartition(dimDomain, 0);
+    const auto& ll = *lowerLeft_;
+    const auto& ur = *upperRight_;
+    const auto& ne = *numElements_;
+    for (size_t dd = 0; dd < dimDomain; ++dd) {
+      // for points that are on upperRight_[d], this selects one partition too much
+      // so we need to cap this
+      whichPartition[dd] = std::min(size_t(std::floor(ne[dd]*((center[dd] - ll[dd])/(ur[dd] - ll[dd])))),
+                                    ne[dd] - 1);
+    }
+    size_t subdomain = 0;
+    if (dimDomain == 1)
+      subdomain = whichPartition[0];
+    else if (dimDomain == 2)
+      subdomain = whichPartition[0] + whichPartition[1]*ne[0];
+    else
+      subdomain = whichPartition[0] + whichPartition[1]*ne[0] + whichPartition[2]*ne[1]*ne[0];
+    // return the component that belongs to the subdomain
+    return std::unique_ptr< Localfunction >(new Localfunction(entity, (*values_)[subdomain]));
+  } // ... local_function(...)
+
+private:
+  std::shared_ptr< const Common::FieldVector< DomainFieldType, dimDomain > > lowerLeft_;
+  std::shared_ptr< const Common::FieldVector< DomainFieldType, dimDomain > > upperRight_;
+  std::shared_ptr< const Common::FieldVector< size_t, dimDomain > > numElements_;
+  std::shared_ptr< const std::vector< ExpressionFunctionType > > values_;
+  std::string name_;
+}; // class ExpressionCheckerboard
 
 
 } // namespace Functions
