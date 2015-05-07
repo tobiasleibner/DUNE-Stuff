@@ -97,6 +97,7 @@ public:
     config["upper_right"] = "[1.0 1.0 1.0]";
     config["num_elements"] = "[2 2 2]";
     config["values"] = "[1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0]";
+    config["values_are_vectors"] = "false";
     config["name"] = static_id();
     if (sub_name.empty())
       return config;
@@ -120,9 +121,16 @@ public:
     for (size_t ii = 0; ii < num_elements.size(); ++ii)
       num_values *= num_elements[ii];
     std::vector< RangeType > values(num_values);
-    auto values_rf = cfg.get("values", default_cfg.get< std::vector< RangeFieldType > >("values"), num_values);
-    for (size_t ii = 0; ii < values_rf.size(); ++ii)
-      values[ii] = RangeType(values_rf[ii]);
+    const bool values_are_vectors = cfg.get("values_are_vectors", default_cfg.get< bool >("values_are_vectors"));
+    if (values_are_vectors) {
+      auto values_matrix = cfg.get("values", default_cfg.get< Dune::DynamicMatrix< RangeFieldType > >("values"), num_values, rangeDim);
+      for (size_t ii = 0; ii < num_values; ++ii)
+        values[ii] = RangeType(values_matrix[ii]);
+    } else {
+      auto values_rf = cfg.get("values", default_cfg.get< std::vector< RangeFieldType > >("values"), num_values);
+      for (size_t ii = 0; ii < values_rf.size(); ++ii)
+        values[ii] = RangeType(values_rf[ii]);
+    }
     // create
     return Common::make_unique< ThisType >(
             cfg.get("lower_left",
