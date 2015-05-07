@@ -220,38 +220,54 @@ private:
 
 
 template< class EntityImp, class DomainFieldImp, size_t domainDim,
-          class ExpressionEntityImp, class ExpressionDomainFieldImp, size_t expressionDomainDim,
-          class RangeFieldImp, size_t rangeDim, size_t rangeDimCols = 1 >
+          class RangeEntityImp, class RangeDomainFieldImp, size_t rangeDomainDim,
+          class RangeRangeFieldImp, size_t rangeRangeDim, size_t rangeRangeDimCols = 1 >
 class ExpressionCheckerboard
-  : public LocalizableFunctionInterface< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, rangeDimCols >
+  : public GlobalFunctionValuedFunctionInterface< EntityImp, DomainFieldImp, domainDim,
+                                            RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
+                                            RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >
 {
-  typedef LocalizableFunctionInterface< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, rangeDimCols >
-    BaseType;
+  typedef GlobalFunctionValuedFunctionInterface< EntityImp, DomainFieldImp, domainDim,
+                                           RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
+                                           RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >       BaseType;
   typedef ExpressionCheckerboard< EntityImp, DomainFieldImp, domainDim,
-                                  ExpressionEntityImp,
-                                  ExpressionDomainFieldImp, expressionDomainDim,
-                                  RangeFieldImp, rangeDim, rangeDimCols > ThisType;
-  typedef Expression< ExpressionEntityImp,
-                      ExpressionDomainFieldImp, expressionDomainDim,
-                      RangeFieldImp, rangeDim, rangeDimCols > ExpressionFunctionType;
-  typedef typename ExpressionFunctionType::LocalfunctionType ExpressionLocalfunctionType;
+                                  RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
+                                  RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >                ThisType;
+public:
+  using typename BaseType::DomainType;
+  using typename BaseType::RangeDomainType;
+  using typename BaseType::RangeRangeType;
+  using typename BaseType::RangeJacobianRangeType;
+  using typename BaseType::RangeType;
+  using typename BaseType::JacobianRangeType;
+  using typename BaseType::EntityType;
+  using typename BaseType::RangeEntityType;
+  using typename BaseType::LocalfunctionType;
 
+  using typename BaseType::DomainFieldType;
+  using BaseType::dimDomain;
+
+  using typename BaseType::RangeDomainFieldType;
+  using typename BaseType::RangeRangeFieldType;
+  using BaseType::rangeDimDomain;
+  using BaseType::rangeDimRange;
+  using BaseType::rangeDimRangeCols;
+
+  static const bool available = true;
+
+  typedef Expression< RangeEntityType,
+                      RangeDomainFieldType, rangeDimDomain,
+                      RangeRangeFieldType, rangeDimRange, rangeDimRangeCols >         ExpressionFunctionType;
+  typedef typename ExpressionFunctionType::LocalfunctionType                          ExpressionLocalfunctionType;
+
+private:
   class Localfunction
-    : public LocalfunctionInterface< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, rangeDimCols >
+    : public LocalfunctionType
   {
-    typedef LocalfunctionInterface< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, rangeDimCols > BaseType;
   public:
-    typedef typename BaseType::EntityType        EntityType;
-
-    typedef typename BaseType::DomainType        DomainType;
-    typedef typename BaseType::RangeFieldType    RangeFieldType;
-    typedef typename BaseType::RangeType         RangeType;
-    typedef typename BaseType::JacobianRangeType JacobianRangeType;
-    typedef          ExpressionFunctionType      ExpressionRangeType;
-
     Localfunction(const EntityType& ent, const ExpressionFunctionType& value)
-      : BaseType(ent)
-      , value_(value)
+      : LocalfunctionType(ent)
+      , value_(std::make_shared< ExpressionFunctionType >(value))
     {}
 
     Localfunction(const Localfunction& /*other*/) = delete;
@@ -263,36 +279,21 @@ class ExpressionCheckerboard
       return 10;
     }
 
-    const ExpressionRangeType* evaluate_expression(const DomainType& xx) const
+    virtual void evaluate(const DomainType& xx, std::shared_ptr< const RangeType >& ret) const override
     {
-      return &value_;
+      ret = std::shared_ptr< const RangeType >(value_);
     }
 
-    virtual void evaluate(const DomainType& xx, RangeType& ret) const
-    {
-      DUNE_THROW(Dune::NotImplemented, "Not implemented");
-    }
-
-    virtual void jacobian(const DomainType& xx, JacobianRangeType& ret) const override
+    virtual void jacobian(const DomainType& xx, std::shared_ptr< const JacobianRangeType >& ret) const override
     {
       DUNE_THROW(Dune::NotImplemented, "Not implemented");
     }
 
   private:
-    const ExpressionFunctionType& value_;
+    const std::shared_ptr< const ExpressionFunctionType > value_;
   }; // class Localfunction
 
 public:
-  typedef typename BaseType::EntityType         EntityType;
-  typedef typename BaseType::LocalfunctionType  LocalfunctionType;
-
-  typedef typename BaseType::DomainFieldType  DomainFieldType;
-  static const size_t                         dimDomain = BaseType::dimDomain;
-
-  typedef typename BaseType::RangeFieldType RangeFieldType;
-  typedef typename BaseType::RangeType      RangeType;
-
-  static const bool available = true;
 
   static std::string static_id()
   {
@@ -334,12 +335,12 @@ public:
     const std::string variable = cfg.get("variable",   default_cfg.get< std::string >("variable"));
     const bool values_are_vectors = cfg.get("values_are_vectors", default_cfg.get< bool >("values_are_vectors"));
     if (values_are_vectors) {
-      auto values_matrix = cfg.get("values", default_cfg.get< Dune::DynamicMatrix< std::string > >("values"), num_values, rangeDim);
+      auto values_matrix = cfg.get("values", default_cfg.get< Dune::DynamicMatrix< std::string > >("values"), num_values, rangeDimRange);
       for (size_t ii = 0; ii < num_values; ++ii) {
         // get row
         const auto& row = values_matrix[ii];
-        std::vector< std::string > std_row(rangeDim);
-        for (size_t jj = 0; jj < rangeDim; ++jj)
+        std::vector< std::string > std_row(rangeDimRange);
+        for (size_t jj = 0; jj < rangeDimRange; ++jj)
           std_row[jj] = row[jj];
         values.emplace_back(ExpressionFunctionType(variable, std_row));
       }
@@ -401,32 +402,7 @@ public:
     return name_;
   }
 
-  virtual std::unique_ptr< LocalfunctionType > local_function(const EntityType& entity) const override
-  {
-    // decide on the subdomain the center of the entity belongs to
-    const auto center = entity.geometry().center();
-    std::vector< size_t > whichPartition(dimDomain, 0);
-    const auto& ll = *lowerLeft_;
-    const auto& ur = *upperRight_;
-    const auto& ne = *numElements_;
-    for (size_t dd = 0; dd < dimDomain; ++dd) {
-      // for points that are on upperRight_[d], this selects one partition too much
-      // so we need to cap this
-      whichPartition[dd] = std::min(size_t(std::floor(ne[dd]*((center[dd] - ll[dd])/(ur[dd] - ll[dd])))),
-                                    ne[dd] - 1);
-    }
-    size_t subdomain = 0;
-    if (dimDomain == 1)
-      subdomain = whichPartition[0];
-    else if (dimDomain == 2)
-      subdomain = whichPartition[0] + whichPartition[1]*ne[0];
-    else
-      subdomain = whichPartition[0] + whichPartition[1]*ne[0] + whichPartition[2]*ne[1]*ne[0];
-    // return the component that belongs to the subdomain
-    return std::unique_ptr< Localfunction >(new Localfunction(entity, (*values_)[subdomain]));
-  } // ... local_function(...)
-
-  virtual std::unique_ptr< Localfunction > local_function_expression(const EntityType& entity) const
+  virtual std::unique_ptr< LocalfunctionType > local_global_function(const EntityType& entity) const override
   {
     // decide on the subdomain the center of the entity belongs to
     const auto center = entity.geometry().center();
