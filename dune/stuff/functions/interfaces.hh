@@ -707,6 +707,374 @@ private:
 }; // class TransferredGlobalFunction
 
 
+/**
+ *  \brief  Interface for functions, which can be partially evaluated locally on one Entity
+ */
+template< class EntityImp, class DomainFieldImp, size_t domainDim,
+          class RangeEntityImp, class RangeDomainFieldImp, size_t rangeDomainDim,
+          class RangeRangeFieldImp, size_t rangeRangeDim, size_t rangeRangeDimCols >
+class FunctionValuedLocalfunctionInterface
+{
+  typedef FunctionValuedLocalfunctionInterface< EntityImp, DomainFieldImp, domainDim,
+                                                RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
+                                                RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >         ThisType;
+  typedef LocalfunctionSetInterface< EntityImp, DomainFieldImp, domainDim,
+                                     RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >    LocalfunctionSetInterfaceType;
+
+  template< size_t d, class R, size_t r, size_t rC >
+  struct RangeJacobianRangeTypeSelector
+  {
+    typedef double type;
+  };
+
+  template< size_t d, class R, size_t r >
+  struct RangeJacobianRangeTypeSelector< d, R, r, 1 >
+  {
+    typedef Dune::FieldMatrix< R, r, d > type;
+  };
+
+public:
+  typedef EntityImp EntityType;
+  typedef RangeEntityImp RangeEntityType;
+
+  typedef DomainFieldImp DomainFieldType;
+  static const size_t dimDomain = domainDim;
+  typedef RangeDomainFieldImp RangeDomainFieldType;
+  static const size_t rangeDimDomain = rangeDomainDim;
+  static const size_t entireDimDomain = dimDomain + rangeDimDomain;
+
+  typedef RangeRangeFieldImp RangeRangeFieldType;
+  static const size_t   rangeDimRange = rangeRangeDim;
+  static const size_t   rangeDimRangeCols = rangeRangeDimCols;
+  typedef Dune::FieldVector< DomainFieldType, dimDomain >            DomainType;
+  typedef Dune::FieldVector< RangeDomainFieldType, rangeDimDomain >  RangeDomainType;
+  typedef typename LocalfunctionSetInterfaceType::RangeType          RangeRangeType;
+  typedef RangeJacobianRangeTypeSelector< dimDomain, RangeRangeFieldType, rangeDimRange, rangeDimRangeCols > RangeJacobianRangeType;
+  typedef LocalizableFunctionInterface< RangeEntityType,
+                                        RangeDomainFieldType, rangeDimDomain,
+                                        RangeRangeFieldType, rangeDimRange, rangeDimRangeCols >   RangeType;
+  typedef LocalizableFunctionInterface< RangeEntityType,
+                                        RangeDomainFieldType, rangeDimDomain,
+                                        RangeRangeFieldType, rangeDimRangeCols, dimDomain >       JacobianRangeType;
+
+  FunctionValuedLocalfunctionInterface(const EntityType& ent)
+    : entity_(ent)
+  {}
+
+  virtual ~FunctionValuedLocalfunctionInterface() {}
+
+  virtual const EntityType& entity() const
+  {
+    return entity_;
+  }
+
+  /**
+   * \defgroup haveto ´´These methods have to be implemented.''
+   * @{
+   **/
+
+  virtual size_t order() const = 0;
+
+  virtual void evaluate(const DomainType& /*xx*/, std::shared_ptr< const RangeType >& ret) const = 0;
+
+  virtual void jacobian(const DomainType& /*xx*/, std::shared_ptr< const JacobianRangeType >& ret) const = 0;
+
+  /** @} */
+
+  /**
+   * \defgroup provided ´´These methods are provided by the interface.''
+   * @{
+   **/
+
+  std::shared_ptr< const RangeType > evaluate(const DomainType& xx) const
+  {
+    std::shared_ptr< const RangeType > ret;
+    evaluate(xx, ret);
+    return ret;
+  }
+
+  std::shared_ptr< const JacobianRangeType > jacobian(const DomainType& xx) const
+  {
+    std::shared_ptr< const JacobianRangeType > ret;
+    jacobian(xx, ret);
+    return ret;
+  }
+
+  /** @} */
+
+protected:
+  bool is_a_valid_point(const DomainType&
+#ifndef DUNE_STUFF_FUNCTIONS_DISABLE_CHECKS
+                                          xx
+#else
+                                          /*xx*/
+#endif
+                                                ) const
+  {
+#ifndef DUNE_STUFF_FUNCTIONS_DISABLE_CHECKS
+    const auto& reference_element = ReferenceElements< DomainFieldType, dimDomain >::general(entity().type());
+    return reference_element.checkInside(xx);
+#else // DUNE_STUFF_FUNCTIONS_DISABLE_CHECKS
+    return true;
+#endif
+  }
+
+private:
+    const EntityType& entity_;
+}; // class FunctionValuedFunctionInterface
+
+/**
+ * \brief Interface for functions f(x,u) that are localizable in x but not in u
+ */
+template< class EntityImp, class DomainFieldImp, size_t domainDim,
+          class RangeEntityImp, class RangeDomainFieldImp, size_t rangeDomainDim,
+          class RangeRangeFieldImp, size_t rangeRangeDim, size_t rangeRangeDimCols >
+class FunctionValuedFunctionInterface
+{
+  typedef FunctionValuedFunctionInterface< EntityImp, DomainFieldImp, domainDim,
+                                                RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
+                                                RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >         ThisType;
+public:
+  typedef FunctionValuedLocalfunctionInterface< EntityImp,
+                                          DomainFieldImp, domainDim,
+                                          RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
+                                          RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >      LocalfunctionType;
+
+  typedef typename LocalfunctionType::DomainType                   DomainType;
+  typedef typename LocalfunctionType::RangeDomainType              RangeDomainType;
+  typedef typename LocalfunctionType::RangeRangeType               RangeRangeType;
+  typedef typename LocalfunctionType::RangeJacobianRangeType       RangeJacobianRangeType;
+  typedef typename LocalfunctionType::RangeType                    RangeType;
+  typedef typename LocalfunctionType::JacobianRangeType            JacobianRangeType;
+  typedef typename LocalfunctionType::EntityType                   EntityType;
+  typedef typename LocalfunctionType::RangeEntityType              RangeEntityType;
+
+  typedef typename LocalfunctionType::DomainFieldType DomainFieldType;
+  static const size_t dimDomain = LocalfunctionType::dimDomain;
+
+  typedef typename LocalfunctionType::RangeDomainFieldType RangeDomainFieldType;
+  typedef typename LocalfunctionType::RangeRangeFieldType RangeRangeFieldType;
+  static const size_t   rangeDimDomain = LocalfunctionType::rangeDimDomain;
+  static const size_t   rangeDimRange = LocalfunctionType::rangeDimRange;
+  static const size_t   rangeDimRangeCols = LocalfunctionType::rangeDimRangeCols;
+
+  static const bool available = false;
+
+  typedef Functions::Difference< ThisType, ThisType > DifferenceType;
+  typedef Functions::Sum< ThisType, ThisType >        SumType;
+  typedef Functions::Divergence< ThisType >           DivergenceType;
+
+  virtual ~FunctionValuedFunctionInterface() {}
+
+  static std::string static_id()
+  {
+    return "stuff.function";
+  }
+
+  /**
+   * \defgroup haveto ´´These methods have to be implemented.''
+   * @{
+   **/
+  virtual std::unique_ptr< LocalfunctionType > local_function(const EntityType& /*entity*/) const = 0;
+  /* @} */
+
+  /** \defgroup info ´´These methods should be implemented in order to identify the function.'' */
+  /* @{ */
+  virtual std::string type() const
+  {
+    return "stuff.function";
+  }
+
+  virtual std::string name() const
+  {
+    return "stuff.function";
+  }
+  /* @} */
+
+  DifferenceType operator-(const ThisType& other) const
+  {
+    return DifferenceType(*this, other);
+  }
+
+  SumType operator+(const ThisType& other) const
+  {
+    return SumType(*this, other);
+  }
+
+  template< class OtherType >
+  typename std::enable_if< is_localizable_function< OtherType >::value,
+                           Functions::Product< ThisType, OtherType > >::type
+  operator*(const OtherType& other) const
+  {
+    return Functions::Product< ThisType, OtherType >(*this, other);
+  }
+
+  DivergenceType divergence() const
+  {
+    return DivergenceType(*this);
+  }
+
+  virtual void report(std::ostream& out, const std::string prefix = "") const
+  {
+    out << prefix << "function '" << name() << "' (of type " << type() << ")";
+  }
+
+private:
+  template< class T >
+  friend std::ostream& operator<<(std::ostream& /*out*/, const ThisType& /*function*/);
+}; // class FunctionValuedFunctionInterface
+
+
+/**
+ * \brief Interface for functions f(x,u) that are localizable in x and global evaluable in u
+ */
+template< class EntityImp, class DomainFieldImp, size_t domainDim,
+          class RangeEntityImp, class RangeDomainFieldImp, size_t rangeDomainDim,
+          class RangeRangeFieldImp, size_t rangeRangeDim, size_t rangeRangeDimCols >
+class GlobalFunctionValuedFunctionInterface
+    : public FunctionValuedFunctionInterface < EntityImp, DomainFieldImp, domainDim,
+                                                    RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
+                                                    RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >
+{
+  typedef GlobalFunctionValuedFunctionInterface< EntityImp, DomainFieldImp, domainDim,
+                                                RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
+                                                RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >         ThisType;
+  typedef FunctionValuedFunctionInterface< EntityImp, DomainFieldImp, domainDim,
+                                                         RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
+                                                         RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols > BaseType;
+public:
+  using typename BaseType::DomainType;
+  using typename BaseType::RangeDomainType;
+  using typename BaseType::RangeRangeType;
+  using typename BaseType::RangeJacobianRangeType;
+  using typename BaseType::EntityType;
+  using typename BaseType::RangeEntityType;
+  typedef typename BaseType::LocalfunctionType BaseLocalFunctionType;
+
+  using typename BaseType::DomainFieldType;
+  using BaseType::dimDomain;
+
+  using typename BaseType::RangeDomainFieldType;
+  using typename BaseType::RangeRangeFieldType;
+  using BaseType::rangeDimDomain;
+  using BaseType::rangeDimRange;
+  using BaseType::rangeDimRangeCols;
+
+  typedef GlobalFunctionInterface< RangeEntityType,
+                                   RangeDomainFieldType, rangeDimDomain,
+                                   RangeRangeFieldType, rangeDimRange, rangeDimRangeCols >   RangeType;
+  typedef GlobalFunctionInterface< RangeEntityType,
+                                   RangeDomainFieldType, rangeDimDomain,
+                                   RangeRangeFieldType, rangeDimRangeCols, dimDomain >       JacobianRangeType;
+
+  static const bool available = false;
+
+  virtual ~GlobalFunctionValuedFunctionInterface() {}
+
+private:
+  class Localfunction
+      : public BaseLocalFunctionType
+  {
+    typedef typename BaseLocalFunctionType::RangeType BaseRangeType;
+    typedef typename BaseLocalFunctionType::JacobianRangeType BaseJacobianRangeType;
+
+    typedef GlobalFunctionInterface< RangeEntityType,
+                                     RangeDomainFieldType, rangeDimDomain,
+                                     RangeRangeFieldType, rangeDimRange, rangeDimRangeCols >   RangeType;
+    typedef GlobalFunctionInterface< RangeEntityType,
+                                     RangeDomainFieldType, rangeDimDomain,
+                                     RangeRangeFieldType, rangeDimRangeCols, dimDomain >       JacobianRangeType;
+  public:
+    Localfunction(const EntityImp& entity_in)
+      : BaseLocalFunctionType(entity_in)
+    {}
+
+    virtual void evaluate(const DomainType& /*xx*/, std::shared_ptr< const RangeType >& ret) const = 0;
+
+    virtual void jacobian(const DomainType& /*xx*/, std::shared_ptr< const JacobianRangeType >& ret) const = 0;
+
+    virtual void evaluate(const DomainType& xx, std::shared_ptr< const BaseRangeType >& ret) const override final
+    {
+      std::shared_ptr< const RangeType > derived;
+      evaluate(xx, derived);
+      ret = std::shared_ptr< const BaseRangeType >(derived);
+    }
+
+    virtual void jacobian(const DomainType& xx, std::shared_ptr< const BaseJacobianRangeType >& ret) const override final
+    {
+      std::shared_ptr< const JacobianRangeType > derived;
+      jacobian(xx, derived);
+      ret = std::shared_ptr< const BaseJacobianRangeType >(derived);
+    }
+
+    std::shared_ptr< const RangeType > evaluate(const DomainType& xx) const
+    {
+      std::shared_ptr< const RangeType > ret;
+      evaluate(xx, ret);
+      return ret;
+    }
+
+    std::shared_ptr< const JacobianRangeType > jacobian(const DomainType& xx) const
+    {
+      std::shared_ptr< const JacobianRangeType > ret;
+      jacobian(xx, ret);
+      return ret;
+    }
+
+    void evaluate(const DomainType& xx, const RangeDomainType& uu, RangeRangeType& ret) const
+    {
+      std::shared_ptr< const RangeType > range_func = evaluate(xx);
+      ret = range_func->evaluate(uu);
+    }
+
+    RangeRangeType evaluate(const DomainType& xx, const RangeDomainType& uu) const
+    {
+      RangeRangeType ret(RangeRangeFieldType(0));
+      evaluate(xx, uu, ret);
+      return ret;
+    }
+
+    using BaseLocalFunctionType::jacobian;
+
+    void jacobian(const DomainType& xx, const RangeDomainType& uu, RangeJacobianRangeType& ret) const
+    {
+      std::shared_ptr< const JacobianRangeType > range_func = jacobian(xx);
+      ret = range_func->jacobian(uu);
+    }
+
+    RangeJacobianRangeType jacobian(const DomainType& xx, const RangeDomainType& uu) const
+    {
+      RangeJacobianRangeType ret(RangeRangeFieldType(0));
+      jacobian(xx, uu, ret);
+      return ret;
+    }
+  }; //class Localfunction
+
+public:
+  typedef Localfunction LocalfunctionType;
+
+  virtual std::unique_ptr< LocalfunctionType > local_global_function(const EntityType& /*entity*/) const = 0;
+
+  virtual std::unique_ptr< BaseLocalFunctionType > local_function(const EntityType& entity) const override final
+  {
+    return std::unique_ptr< BaseLocalFunctionType >(std::move(local_global_function(entity)));
+  }
+
+
+  virtual std::string type() const override
+  {
+    return "stuff.globalfunctionvaluedfunction";
+  }
+
+  virtual std::string name() const override
+  {
+    return "stuff.globalfunctionvaluedfunction";
+  }
+
+}; // class GlobalFunctionValuedFunctionInterface
+
+
+
 //! Utility to generate a complete Function Type from an existing one and a template
 template <class FunctionImp, template <class, class, size_t, class, size_t, size_t> class OutTemplate>
 struct FunctionTypeGenerator {
