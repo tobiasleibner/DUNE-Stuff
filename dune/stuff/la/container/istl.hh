@@ -10,12 +10,14 @@
 
 #include <vector>
 #include <initializer_list>
+#include <complex>
 
 #include <boost/numeric/conversion/cast.hpp>
 
 #include <dune/common/fmatrix.hh>
 #include <dune/common/fvector.hh>
 #include <dune/common/typetraits.hh>
+#include <dune/common/ftraits.hh>
 
 #if HAVE_DUNE_ISTL
 # include <dune/istl/bvector.hh>
@@ -51,9 +53,10 @@ template< class ScalarImp >
 class IstlDenseVectorTraits
 {
 public:
-  typedef ScalarImp ScalarType;
-  typedef IstlDenseVector< ScalarImp >                derived_type;
-  typedef BlockVector< FieldVector< ScalarType, 1 > > BackendType;
+  typedef typename Dune::FieldTraits< ScalarImp >::field_type ScalarType;
+  typedef typename Dune::FieldTraits< ScalarImp >::real_type  RealType;
+  typedef IstlDenseVector< ScalarImp >                        derived_type;
+  typedef BlockVector< FieldVector< ScalarType, 1 > >         BackendType;
 }; // class IstlDenseVectorTraits
 
 
@@ -64,9 +67,10 @@ template< class ScalarImp >
 class IstlRowMajorSparseMatrixTraits
 {
 public:
-  typedef ScalarImp ScalarType;
-  typedef IstlRowMajorSparseMatrix< ScalarType >        derived_type;
-  typedef BCRSMatrix< FieldMatrix< ScalarType, 1, 1 > > BackendType;
+  typedef typename Dune::FieldTraits< ScalarImp >::field_type ScalarType;
+  typedef typename Dune::FieldTraits< ScalarImp >::real_type  RealType;
+  typedef IstlRowMajorSparseMatrix< ScalarType >              derived_type;
+  typedef BCRSMatrix< FieldMatrix< ScalarType, 1, 1 > >       BackendType;
 }; // class RowMajorSparseMatrixTraits
 
 
@@ -88,6 +92,7 @@ class IstlDenseVector
 public:
   typedef internal::IstlDenseVectorTraits< ScalarImp > Traits;
   typedef typename Traits::ScalarType                  ScalarType;
+  typedef typename Traits::RealType                    RealType;
   typedef typename Traits::BackendType                 BackendType;
 
   explicit IstlDenseVector(const size_t ss = 0, const ScalarType value = ScalarType(0))
@@ -260,17 +265,17 @@ public:
     return backend_->dot(*(other.backend_));
   } // ... dot(...)
 
-  virtual ScalarType l1_norm() const override final
+  virtual RealType l1_norm() const override final
   {
     return backend_->one_norm();
   }
 
-  virtual ScalarType l2_norm() const override final
+  virtual RealType l2_norm() const override final
   {
     return backend_->two_norm();
   }
 
-  virtual ScalarType sup_norm() const override final
+  virtual RealType sup_norm() const override final
   {
     return backend_->infinity_norm();
   }
@@ -370,6 +375,7 @@ public:
   typedef internal::IstlRowMajorSparseMatrixTraits< ScalarImp > Traits;
   typedef typename Traits::BackendType                          BackendType;
   typedef typename Traits::ScalarType                           ScalarType;
+  typedef typename Traits::RealType                             RealType;
 
   /**
    * \brief This is the constructor of interest which creates a sparse matrix.
@@ -591,7 +597,7 @@ public:
       for (size_t jj = 0; jj < cols(); ++jj)
         if (backend_->exists(ii, jj)) {
           const auto& entry = row_vec[jj][0];
-          if (std::isnan(entry) || std::isinf(entry))
+          if (std::isnan(std::real(entry[0])) || std::isnan(std::imag(entry[0])) || std::isinf(std::abs(entry[0])))
             return false;
         }
     }

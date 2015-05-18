@@ -7,13 +7,40 @@
 #define DUNE_STUFF_COMMON_FLOAT_CMP_HH
 
 #include <type_traits>
+#include <complex>
 
 #include <dune/common/float_cmp.hh>
+
+#include <dune/stuff/common/type_utils.hh>
 
 namespace Dune {
 namespace Stuff {
 namespace Common {
+namespace internal {
 
+
+template< class Tt >
+struct is_complex_helper
+{
+  DSC_has_typedef_initialize_once(value_type)
+
+  static const bool is_candidate = DSC_has_typedef(value_type)< Tt >::value;
+}; // class is_complex_helper
+
+
+} // namespace internal
+
+
+template< class T, bool candidate = internal::is_complex_helper< T >::is_candidate >
+struct is_complex
+  : public std::is_base_of< std::complex< typename T::value_type >, T >
+{};
+
+
+template< class T >
+struct is_complex< T, false >
+  : public std::false_type
+{};
 
 // forwards (include is below)
 template< class VecType >
@@ -97,12 +124,20 @@ float_cmp(const T& xx, const T& yy, const T& rtol, const T& atol)
 }
 
 
+template< class T >
+    typename std::enable_if< is_complex< T >::value, bool >::type
+float_cmp(const T& xx, const T& yy, const typename T::value_type& rtol, const typename T::value_type& atol )
+{
+  return (float_cmp(std::real(xx), std::real(yy), rtol, atol) && float_cmp(std::imag(xx), std::imag(yy), rtol, atol));
+}
+
+
 template< class XType, class YType, class TolType >
     typename std::enable_if<    is_vector< XType >::value
                              && is_vector< YType >::value
                              && std::is_arithmetic< TolType >::value
-                             && std::is_same< typename VectorAbstraction< XType >::S, TolType >::value
-                             && std::is_same< typename VectorAbstraction< YType >::S, TolType >::value
+                             && std::is_same< typename VectorAbstraction< XType >::R, TolType >::value
+                             && std::is_same< typename VectorAbstraction< YType >::R, TolType >::value
                            , bool >::type
 float_cmp(const XType& xx, const YType& yy, const TolType& rtol, const TolType& atol)
 {
@@ -265,16 +300,16 @@ struct Call< FirstType, SecondType, ToleranceType, Style::numpy >
 
 
 #define DUNE_STUFF_COMMON_FLOAT_CMP_GENERATOR(id) \
-  template< Style style, class FirstType, class SecondType, class ToleranceType = typename VectorAbstraction< FirstType >::S > \
+  template< Style style, class FirstType, class SecondType, class ToleranceType = typename VectorAbstraction< FirstType >::R > \
       typename std::enable_if<    (   std::is_arithmetic< FirstType >::value \
                                    && std::is_same< FirstType, SecondType >::value) \
                                || (std::is_arithmetic< ToleranceType >::value \
                                    && is_vector< FirstType >::value \
                                    && is_vector< SecondType >::value \
                                    && std::is_same< ToleranceType \
-                                                  , typename VectorAbstraction< FirstType >::S >::value \
+                                                  , typename VectorAbstraction< FirstType >::R >::value \
                                    && std::is_same< ToleranceType \
-                                                  , typename VectorAbstraction< SecondType >::S >::value) \
+                                                  , typename VectorAbstraction< SecondType >::R >::value) \
                              , bool >::type \
   id (const FirstType& first, \
       const SecondType& second, \
@@ -289,16 +324,16 @@ struct Call< FirstType, SecondType, ToleranceType, Style::numpy >
                            style >:: id (first, second, rtol, atol); \
   } \
   \
-  template< class FirstType, class SecondType, class ToleranceType = typename VectorAbstraction< FirstType >::S > \
+  template< class FirstType, class SecondType, class ToleranceType = typename VectorAbstraction< FirstType >::R > \
       typename std::enable_if<    (   std::is_arithmetic< FirstType >::value \
                                    && std::is_same< FirstType, SecondType >::value) \
                                || (std::is_arithmetic< ToleranceType >::value \
                                    && is_vector< FirstType >::value \
                                    && is_vector< SecondType >::value \
                                    && std::is_same< ToleranceType \
-                                                  , typename VectorAbstraction< FirstType >::S >::value \
+                                                  , typename VectorAbstraction< FirstType >::R >::value \
                                    && std::is_same< ToleranceType \
-                                                  , typename VectorAbstraction< SecondType >::S >::value) \
+                                                  , typename VectorAbstraction< SecondType >::R >::value) \
                              , bool >::type \
   id (const FirstType& first, \
       const SecondType& second, \
