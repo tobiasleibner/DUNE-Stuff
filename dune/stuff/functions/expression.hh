@@ -393,24 +393,33 @@ private:
 }; // class Expression
 
 
-template< class EntityImp, class DomainFieldImp, size_t domainDim, class RangeFieldImp, size_t rangeDim, size_t rangeDimCols, class TimeFieldImp = double >
+template< class EntityImp,
+          class DomainFieldImp, size_t domainDim,
+          class RangeFieldImp, size_t rangeDim, size_t rangeDimCols,
+          class TimeFieldImp = double >
 class TimeDependentExpression
 {
-  typedef TimeDependentExpression< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, rangeDimCols, TimeFieldImp > ThisType;
+  typedef TimeDependentExpression< EntityImp,
+                                   DomainFieldImp, domainDim,
+                                   RangeFieldImp, rangeDim, rangeDimCols,
+                                   TimeFieldImp >                           ThisType;
 
 public:
-  typedef Expression< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, rangeDimCols > ExpressionFunctionType;
-  typedef EntityImp         EntityType;
-  typedef DomainFieldImp    DomainFieldType;
-  static const size_t                   dimDomain = domainDim;
-  typedef typename ExpressionFunctionType::DomainType DomainType;
-  typedef RangeFieldImp                 RangeFieldType;
-  static const size_t                   dimRange = rangeDim;
-  typedef typename ExpressionFunctionType::RangeType  RangeType;
-  static const size_t                   dimRangeCols = rangeDimCols;
-  typedef TimeFieldImp                       TimeFieldType;
-
-  typedef typename ExpressionFunctionType::JacobianRangeType JacobianRangeType;
+  typedef Expression< EntityImp,
+                      DomainFieldImp, domainDim,
+                      RangeFieldImp, rangeDim, rangeDimCols >               ExpressionFunctionType;
+  typedef EntityImp                                                         EntityType;
+  typedef DomainFieldImp                                                    DomainFieldType;
+  static const size_t                                                       dimDomain = domainDim;
+  typedef typename ExpressionFunctionType::DomainType                       DomainType;
+  typedef RangeFieldImp                                                     RangeFieldType;
+  static const size_t                                                       dimRange = rangeDim;
+  static const size_t                                                       dimRangeCols = rangeDimCols;
+  typedef typename ExpressionFunctionType::RangeType                        RangeType;
+  typedef TimeFieldImp                                                      TimeFieldType;
+  typedef typename ExpressionFunctionType::JacobianRangeType                JacobianRangeType;
+  typedef typename ExpressionFunctionType::ExpressionStringVectorType       ExpressionStringVectorType;
+  typedef typename ExpressionFunctionType::GradientStringVectorType         GradientStringVectorType;
 
   static std::string static_id()
   {
@@ -433,53 +442,103 @@ public:
     }
   } // ... default_config(...)
 
-  static std::unique_ptr< ThisType > create(const Common::Configuration config = default_config(), const std::string sub_name = static_id())
+  static std::unique_ptr< ThisType > create(const Common::Configuration config = default_config(),
+                                            const std::string sub_name = static_id())
   {
     // get correct config
     const Common::Configuration cfg = config.has_sub(sub_name) ? config.sub(sub_name) : config;
     const Common::Configuration default_cfg = default_config();
-    // get gradient
-    std::vector< std::vector < std::string > > gradient_as_vectors;
-    if (cfg.has_key("gradient")) {
-      // get gradient as FieldMatrix
-      typedef typename Dune::FieldMatrix< std::string, dimRange, dimDomain > JacobianMatrixType;
-      const JacobianMatrixType gradient_as_matrix = cfg.get< JacobianMatrixType >("gradient");
-      // convert FieldMatrix to std::vector< std::vector < std::string > >
-      for (size_t rr = 0; rr < dimRange; ++rr) {
-        std::vector< std::string > gradient_expression;
-        for (size_t cc = 0; cc < dimDomain; ++cc)
-          gradient_expression.emplace_back(gradient_as_matrix[rr][cc]);
-        gradient_as_vectors.emplace_back(gradient_expression);
+    // get expression
+    ExpressionStringVectorType expression_as_vectors;
+    // try to get expression as FieldVector (if dimRangeCols == 1) or as FieldMatrix (else)
+    try {
+      get_expression_helper(cfg, expression_as_vectors, internal::ChooseVariant< dimRangeCols >());
+    } catch (Exceptions::conversion_error) {
+      // if dimRangeCols == 1 and we could not get expression as FieldVector, get it as FieldMatrix with one col
+      if (dimRangeCols == 1) {
+        get_expression_helper(cfg, expression_as_vectors, internal::ChooseVariant< 2 >());
+      } else { // if dimRangeCols > 1 do the same again (to throw exception without catching it)
+        get_expression_helper(cfg, expression_as_vectors, internal::ChooseVariant< dimRangeCols >());
       }
+    }
+    // get gradient
+    GradientStringVectorType gradient_as_vectors;
+    if (cfg.has_key("gradient")) {
+      if (cfg.has_key("gradient.0"))
+        assert((cfg.get< std::string >("gradient") == cfg.get< std::string >("gradient.0"))
+               && "gradient and gradient.0 differ but should be synonymous!");
+      get_gradient(cfg, gradient_as_vectors, "gradient");
+    } else if (cfg.has_key("gradient.0")) {
+      get_gradient(cfg, gradient_as_vectors, "gradient.0");
     }
     // create
     return Common::make_unique< ThisType >(
           cfg.get("variable",   default_cfg.get< std::string >("variable")),
-          cfg.get("expression", default_cfg.get< std::vector< std::string > >("expression")),
+          expression_as_vectors,
           cfg.get("order",      default_cfg.get< size_t >("order")),
           cfg.get("name",       default_cfg.get< std::string >("name")),
           gradient_as_vectors);
   } // ... create(...)
 
+
+  /**
+   * \brief Creates a TimeDependentExpression function where every component is identical
+   */
   TimeDependentExpression(const std::string variable,
-                          const std::string expression,
-                          const size_t ord = default_config().get< size_t >("order"),
-                          const std::string nm = static_id(),
-                          const std::vector< std::vector< std::string > > gradient_expressions
-                          = std::vector< std::vector< std::string > >())
+             const std::string expression,
+             const size_t ord = 0,
+             const std::string nm = static_id(),
+             const std::vector< std::string > gradient = std::vector< std::string >())
     : variable_(variable)
     , order_(ord)
     , name_(nm)
-    , expressions_(DSC::fromString< std::vector< std::string > >(expression))
-    , gradient_expressions_(gradient_expressions)
-  {}
+  {
+    // create ExpressionStringVectorType with identical expressions
+    const std::vector< std::string > expression_row(dimRangeCols, expression);
+    const ExpressionStringVectorType expressions(dimRange, expression_row);
+    // create associated gradient vector
+    GradientStringVectorType gradient_expressions(dimRangeCols);
+    assert(gradient.size() >= dimDomain);
+    const ExpressionStringVectorType gradient_row(dimRange, gradient);
+    for (size_t cc = 0; cc < dimRangeCols; ++cc) {
+      gradient_expressions[cc] = gradient_row;
+    }
+    // copy to member variables
+    expressions_ = expressions;
+    gradient_expressions_(gradient_expressions);
+  }
 
+  /**
+   * \brief Creates a TimeDependentExpression function with dimRangeCols = 1
+   */
   TimeDependentExpression(const std::string variable,
              const std::vector< std::string > expressions,
              const size_t ord = default_config().get< size_t >("order"),
              const std::string nm = static_id(),
              const std::vector< std::vector< std::string > > gradient_expressions
                 = std::vector< std::vector< std::string > >())
+    : variable_(variable)
+    , order_(ord)
+    , name_(nm)
+    , expressions_(ExpressionStringVectorType(1, expressions))
+  {
+    static_assert(dimRangeCols == 1, "This constructor does not make sense for dimRangeCols > 1!");
+    GradientStringVectorType gradient_expressions_vec;
+    if (gradient_expressions.size() > 0) {
+      gradient_expressions_vec.emplace_back(gradient_expressions);
+    }
+    gradient_expressions_ = gradient_expressions_vec;
+  }
+
+  /**
+   * \brief Creates a TimeDependentExpression function
+   */
+  TimeDependentExpression(const std::string variable,
+             const ExpressionStringVectorType expressions,
+             const size_t ord = 0,
+             const std::string nm = static_id(),
+             const GradientStringVectorType gradient_expressions
+                = GradientStringVectorType())
     : variable_(variable)
     , order_(ord)
     , name_(nm)
@@ -499,17 +558,19 @@ public:
 
   ExpressionFunctionType evaluate_at_time(const TimeFieldType t) const
   {
-    std::vector< std::string > expressions_at_time_t(expressions_.size());
-    for (size_t ii = 0; ii < expressions_.size(); ++ii) {
-      expressions_at_time_t[ii] = expressions_[ii];
-      replaceAll(expressions_at_time_t[ii], "t", DSC::toString(t));
+    ExpressionStringVectorType expressions_at_time_t;
+    for (size_t rr = 0; rr < expressions_.size(); ++rr) {
+      expressions_at_time_t.emplace_back(expressions_[rr]);
+      for (size_t cc = 0; cc < expressions_[rr].size(); ++cc) {
+        replaceAll(expressions_at_time_t[rr][cc], "t", DSC::toString(t));
+      }
     }
-    std::vector< std::vector< std::string > > gradients_at_time_t(gradient_expressions_.size());
-    for (size_t ii = 0; ii < gradient_expressions_.size(); ++ii) {
-      const auto gradient = gradient_expressions_[ii];
-      for (size_t jj = 0; jj < gradient.size(); ++jj) {
-        gradients_at_time_t[ii][jj] = gradient[jj];
-        replaceAll(gradients_at_time_t[ii][jj], "t", DSC::toString(t));
+    GradientStringVectorType gradients_at_time_t;
+    for (size_t cc = 0; cc < gradient_expressions_.size(); ++cc) {
+      gradients_at_time_t.emplace_back(gradient_expressions_[cc]);
+      for (size_t rr = 0; rr < gradient_expressions_[cc].size(); ++rr) {
+        for (size_t ii = 0; ii < gradient_expressions_[cc][rr].size(); ++ii)
+          replaceAll(gradients_at_time_t[cc][rr][ii], "t", DSC::toString(t));
       }
     }
     return ExpressionFunctionType(variable_, expressions_at_time_t, order_, name_, gradients_at_time_t);
@@ -536,13 +597,68 @@ private:
       newString += source.substr( lastPos );
 
       source.swap( newString );
-  }
+  } // ... replaceAll(...)
+
+  // the following and the create() methods are simply copied from Expression, TODO: remove code duplication
+  template< size_t rC >
+  static void get_expression_helper(const Common::Configuration& cfg,
+                                    ExpressionStringVectorType& expression_as_vectors,
+                                    internal::ChooseVariant< rC >)
+  {
+    typedef typename Dune::FieldMatrix< std::string, dimRange, dimRangeCols > ExpressionMatrixType;
+    const ExpressionMatrixType expression_as_matrix = cfg.get< ExpressionMatrixType >("expression");
+    // convert FieldMatrix to ExpressionStringVectorType
+    for (size_t rr = 0; rr < dimRange; ++rr) {
+      std::vector< std::string > expression_row;
+      for (size_t cc = 0; cc < dimRangeCols; ++cc)
+        expression_row.emplace_back(expression_as_matrix[rr][cc]);
+      expression_as_vectors.emplace_back(expression_row);
+    }
+  } // ... get_expression_helper(...)
+
+  static void get_expression_helper(const Common::Configuration& cfg,
+                                    ExpressionStringVectorType& expression_as_vectors,
+                                    internal::ChooseVariant< 1 >)
+  {
+    typedef typename Dune::FieldVector< std::string, dimRange > ExpressionVectorType;
+    const ExpressionVectorType expression_as_vector = cfg.get< ExpressionVectorType >("expression");
+    // convert Vector to ExpressionStringVectorType
+    for (size_t rr = 0; rr < dimRange; ++rr) {
+      std::vector< std::string > expression_row(1, expression_as_vector[rr]);
+      expression_as_vectors.emplace_back(expression_row);
+    }
+  } // ... get_expression_helper(..., ...< 1 >)
+
+  static void get_gradient(const Common::Configuration& cfg,
+                           GradientStringVectorType& gradient_as_vectors,
+                           const std::string first_gradient_key)
+  {
+    // create vector of gradient keys
+    std::vector< std::string > gradient_keys(1, first_gradient_key);
+    for (size_t cc = 1; cc < dimRangeCols; ++cc)
+      gradient_keys.emplace_back("gradient." + DSC::toString(cc));
+    // get gradient as FieldMatrix for every key
+    for (std::string key: gradient_keys) {
+      ExpressionStringVectorType gradient_as_vectors_component;
+      typedef typename Dune::FieldMatrix< std::string, dimRange, dimDomain > JacobianMatrixType;
+      const JacobianMatrixType gradient_as_matrix = cfg.get< JacobianMatrixType >(key);
+      // convert FieldMatrix to ExpressionStringVectorType
+      for (size_t rr = 0; rr < dimRange; ++rr) {
+        std::vector< std::string > gradient_expression;
+        for (size_t ii = 0; ii < dimDomain; ++ii)
+          gradient_expression.emplace_back(gradient_as_matrix[rr][ii]);
+        gradient_as_vectors_component.emplace_back(gradient_expression);
+      }
+      gradient_as_vectors.emplace_back(gradient_as_vectors_component);
+    }
+  } // ... get_gradient(...)
+
   const std::string variable_;
   size_t order_;
   std::string name_;
-  const std::vector< std::string > expressions_;
-  std::vector< std::vector< std::string > > gradient_expressions_;
-}; // class Expression< ..., 1 >
+  ExpressionStringVectorType expressions_;
+  GradientStringVectorType gradient_expressions_;
+}; // class TimeDependentExpression
 
 
 } // namespace Functions
