@@ -13,6 +13,7 @@
 #include <memory>
 #include <type_traits>
 #include <vector>
+#include <complex>
 
 #include <boost/numeric/conversion/cast.hpp>
 
@@ -20,6 +21,7 @@
 #include <dune/common/dynmatrix.hh>
 #include <dune/common/densematrix.hh>
 #include <dune/common/float_cmp.hh>
+#include <dune/common/ftraits.hh>
 
 #include "interfaces.hh"
 #include "pattern.hh"
@@ -45,9 +47,10 @@ template< class ScalarImp = double >
 class CommonDenseVectorTraits
 {
 public:
-  typedef ScalarImp                         ScalarType;
-  typedef CommonDenseVector< ScalarType >   derived_type;
-  typedef Dune::DynamicVector< ScalarType > BackendType;
+  typedef typename Dune::FieldTraits< ScalarImp >::field_type ScalarType;
+  typedef typename Dune::FieldTraits< ScalarImp >::real_type  RealType;
+  typedef CommonDenseVector< ScalarType >                     derived_type;
+  typedef Dune::DynamicVector< ScalarType >                   BackendType;
 };
 
 
@@ -55,9 +58,10 @@ template< class ScalarImp = double >
 class CommonDenseMatrixTraits
 {
 public:
-  typedef ScalarImp                         ScalarType;
-  typedef CommonDenseMatrix< ScalarType >   derived_type;
-  typedef Dune::DynamicMatrix< ScalarType > BackendType;
+  typedef typename Dune::FieldTraits< ScalarImp >::field_type ScalarType;
+  typedef typename Dune::FieldTraits< ScalarImp >::real_type  RealType;
+  typedef CommonDenseMatrix< ScalarType >                     derived_type;
+  typedef Dune::DynamicMatrix< ScalarType >                   BackendType;
 };
 
 
@@ -79,6 +83,7 @@ class CommonDenseVector
 public:
   typedef internal::CommonDenseVectorTraits< ScalarImp > Traits;
   typedef typename Traits::ScalarType                    ScalarType;
+  typedef typename Traits::RealType                      RealType;
   typedef typename Traits::BackendType                   BackendType;
 
   explicit CommonDenseVector(const size_t ss = 0, const ScalarType value = ScalarType(0))
@@ -250,17 +255,17 @@ public:
     return backend_->operator*(*(other.backend_));
   } // ... dot(...)
 
-  virtual ScalarType l1_norm() const override final
+  virtual RealType l1_norm() const override final
   {
     return backend_->one_norm();
   }
 
-  virtual ScalarType l2_norm() const override final
+  virtual RealType l2_norm() const override final
   {
     return backend_->two_norm();
   }
 
-  virtual ScalarType sup_norm() const override final
+  virtual RealType sup_norm() const override final
   {
     return backend_->infinity_norm();
   }
@@ -349,6 +354,7 @@ public:
   typedef internal::CommonDenseMatrixTraits< ScalarImp > Traits;
   typedef typename Traits::BackendType                   BackendType;
   typedef typename Traits::ScalarType                    ScalarType;
+  typedef typename Traits::RealType                      RealType;
 
   explicit CommonDenseMatrix(const size_t rr = 0, const size_t cc = 0, const ScalarType value = ScalarType(0))
     : backend_(new BackendType(rr, cc, value))
@@ -556,7 +562,7 @@ public:
       const auto& row_vec = backend_->operator[](ii);
       for (size_t jj = 0; jj < cols(); ++jj) {
         const auto& entry = row_vec[jj];
-        if (std::isnan(entry) || std::isinf(entry))
+        if (std::isnan(std::real(entry)) || std::isnan(std::imag(entry)) || std::isinf(std::abs(entry)))
           return false;
       }
     }

@@ -10,6 +10,7 @@
 #include <type_traits>
 #include <vector>
 #include <initializer_list>
+#include <complex>
 
 #include <boost/numeric/conversion/cast.hpp>
 
@@ -21,6 +22,7 @@
 
 #include <dune/common/typetraits.hh>
 #include <dune/common/densematrix.hh>
+#include <dune/common/ftraits.hh>
 
 #include <dune/stuff/aliases.hh>
 #include <dune/stuff/common/exceptions.hh>
@@ -60,8 +62,9 @@ template< class ScalarImp = double >
 class EigenDenseVectorTraits
 {
 public:
-  typedef ScalarImp                      ScalarType;
-  typedef EigenDenseVector< ScalarType > derived_type;
+  typedef typename Dune::FieldTraits< ScalarImp >::field_type         ScalarType;
+  typedef typename Dune::FieldTraits< ScalarImp >::real_type          RealType;
+  typedef EigenDenseVector< ScalarType >                              derived_type;
   typedef typename ::Eigen::Matrix< ScalarType, ::Eigen::Dynamic, 1 > BackendType;
 }; // class EigenDenseVectorTraits
 
@@ -74,9 +77,10 @@ class EigenMappedDenseVectorTraits
 {
   typedef typename ::Eigen::Matrix< ScalarImp, ::Eigen::Dynamic, 1 > PlainBackendType;
 public:
-  typedef ScalarImp                            ScalarType;
-  typedef EigenMappedDenseVector< ScalarType > derived_type;
-  typedef Eigen::Map< PlainBackendType >       BackendType;
+  typedef typename Dune::FieldTraits< ScalarImp >::field_type ScalarType;
+  typedef typename Dune::FieldTraits< ScalarImp >::real_type  RealType;
+  typedef EigenMappedDenseVector< ScalarType >                derived_type;
+  typedef Eigen::Map< PlainBackendType >                      BackendType;
 }; // class EigenMappedDenseVectorTraits
 
 
@@ -87,8 +91,9 @@ template< class ScalarImp = double >
 class EigenDenseMatrixTraits
 {
 public:
-  typedef ScalarImp                      ScalarType;
-  typedef EigenDenseMatrix< ScalarType > derived_type;
+  typedef typename Dune::FieldTraits< ScalarImp >::field_type                        ScalarType;
+  typedef typename Dune::FieldTraits< ScalarImp >::real_type                         RealType;
+  typedef EigenDenseMatrix< ScalarType >                                             derived_type;
   typedef typename ::Eigen::Matrix< ScalarType, ::Eigen::Dynamic, ::Eigen::Dynamic > BackendType;
 }; // class EigenDenseMatrixTraits
 
@@ -101,17 +106,18 @@ public:
  */
 template< class ScalarImp = double>
 class EigenDenseVector
-  : public EigenBaseVector< internal::EigenDenseVectorTraits< ScalarImp > >
+  : public EigenBaseVector< internal::EigenDenseVectorTraits< ScalarImp >, ScalarImp >
   , public ProvidesDataAccess< internal::EigenDenseVectorTraits< ScalarImp > >
 {
   typedef EigenDenseVector< ScalarImp >                                               ThisType;
   typedef VectorInterface< internal::EigenDenseVectorTraits< ScalarImp >, ScalarImp > VectorInterfaceType;
-  typedef EigenBaseVector< internal::EigenDenseVectorTraits< ScalarImp > >            BaseType;
+  typedef EigenBaseVector< internal::EigenDenseVectorTraits< ScalarImp >, ScalarImp > BaseType;
   static_assert(!std::is_same< DUNE_STUFF_SSIZE_T, int >::value,
                 "You have to manually disable the constructor below which uses DUNE_STUFF_SSIZE_T!");
 public:
   typedef internal::EigenDenseVectorTraits< ScalarImp > Traits;
   typedef typename Traits::ScalarType                   ScalarType;
+  typedef typename Traits::RealType                     RealType;
   typedef typename Traits::BackendType                  BackendType;
 
 private:
@@ -197,7 +203,7 @@ private:
       backend_ = std::make_shared< BackendType >(*(backend_));
   } // ... ensure_uniqueness(...)
 
-  friend class EigenBaseVector< internal::EigenDenseVectorTraits< ScalarType > >;
+  friend class EigenBaseVector< internal::EigenDenseVectorTraits< ScalarType >, ScalarType >;
 }; // class EigenDenseVector
 
 
@@ -206,11 +212,11 @@ private:
  */
 template< class ScalarImp = double >
 class EigenMappedDenseVector
-  : public EigenBaseVector< internal::EigenMappedDenseVectorTraits< ScalarImp > >
+  : public EigenBaseVector< internal::EigenMappedDenseVectorTraits< ScalarImp >, ScalarImp >
 {
   typedef EigenMappedDenseVector< ScalarImp >                                               ThisType;
   typedef VectorInterface< internal::EigenMappedDenseVectorTraits< ScalarImp >, ScalarImp > VectorInterfaceType;
-  typedef EigenBaseVector< internal::EigenMappedDenseVectorTraits< ScalarImp > >            BaseType;
+  typedef EigenBaseVector< internal::EigenMappedDenseVectorTraits< ScalarImp >, ScalarImp > BaseType;
   static_assert(std::is_same< ScalarImp, double >::value, "Undefined behaviour for non-double data!");
   static_assert(!std::is_same< DUNE_STUFF_SSIZE_T, int >::value,
                 "You have to manually disable the constructor below which uses DUNE_STUFF_SSIZE_T!");
@@ -218,6 +224,7 @@ public:
   typedef internal::EigenMappedDenseVectorTraits< ScalarImp > Traits;
   typedef typename Traits::BackendType                        BackendType;
   typedef typename Traits::ScalarType                         ScalarType;
+  typedef typename Traits::RealType                           RealType;
 
 private:
   typedef typename BackendType::Index EIGEN_size_t;
@@ -336,7 +343,7 @@ private:
     }
   } // ... ensure_uniqueness(...)
 
-  friend class EigenBaseVector< internal::EigenMappedDenseVectorTraits< ScalarType > >;
+  friend class EigenBaseVector< internal::EigenMappedDenseVectorTraits< ScalarType >, ScalarType >;
 }; // class EigenMappedDenseVector
 
 
@@ -357,6 +364,7 @@ public:
   typedef internal::EigenDenseMatrixTraits< ScalarImp > Traits;
   typedef typename Traits::BackendType                  BackendType;
   typedef typename Traits::ScalarType                   ScalarType;
+  typedef typename Traits::RealType                     RealType;
 
 private:
   typedef typename BackendType::Index EIGEN_size_t;
@@ -593,7 +601,7 @@ public:
     for (size_t ii = 0; ii < rows(); ++ii) {
       for (size_t jj = 0; jj < cols(); ++jj) {
         const auto& entry = backend_->operator()(ii, jj);
-        if (std::isnan(entry) || std::isinf(entry))
+        if (std::isnan(std::real(entry)) || std::isnan(std::imag(entry)) || std::isinf(std::abs(entry)))
           return false;
       }
     }

@@ -11,6 +11,7 @@
 
 #include <dune/common/dynvector.hh>
 #include <dune/common/fvector.hh>
+#include <dune/common/ftraits.hh>
 
 #include <dune/stuff/common/exceptions.hh>
 #include <dune/stuff/common/float_cmp.hh>
@@ -35,7 +36,9 @@ struct VectorAbstraction
 {
   typedef VecType VectorType;
   typedef VecType ScalarType;
-  typedef VecType S;
+  typedef VecType RealType;
+  typedef typename Dune::FieldTraits< VecType >::field_type S;
+  typedef typename Dune::FieldTraits< VecType >::real_type  R;
 
   static const bool is_vector = false;
 
@@ -57,9 +60,11 @@ struct VectorAbstraction
 template< class T >
 struct VectorAbstraction< std::vector< T > >
 {
-  typedef std::vector< T > VectorType;
-  typedef T                ScalarType;
-  typedef ScalarType       S;
+  typedef std::vector< T >                            VectorType;
+  typedef typename Dune::FieldTraits< T >::field_type ScalarType;
+  typedef typename Dune::FieldTraits< T >::real_type  RealType;
+  typedef ScalarType S;
+  typedef RealType   R;
 
   static const bool is_vector = true;
 
@@ -81,9 +86,11 @@ struct VectorAbstraction< std::vector< T > >
 template< class K >
 struct VectorAbstraction< Dune::DynamicVector< K > >
 {
-  typedef Dune::DynamicVector< K > VectorType;
-  typedef K                        ScalarType;
-  typedef ScalarType               S;
+  typedef Dune::DynamicVector< K >                    VectorType;
+  typedef typename Dune::FieldTraits< K >::field_type ScalarType;
+  typedef typename Dune::FieldTraits< K >::real_type  RealType;
+  typedef ScalarType S;
+  typedef RealType   R;
 
   static const bool is_vector = true;
 
@@ -105,9 +112,11 @@ struct VectorAbstraction< Dune::DynamicVector< K > >
 template< class K, int SIZE >
 struct VectorAbstraction< Dune::FieldVector< K, SIZE > >
 {
-  typedef Dune::FieldVector< K, SIZE > VectorType;
-  typedef K                            ScalarType;
-  typedef ScalarType                   S;
+  typedef Dune::FieldVector< K, SIZE >                VectorType;
+  typedef typename Dune::FieldTraits< K >::field_type ScalarType;
+  typedef typename Dune::FieldTraits< K >::real_type  RealType;
+  typedef ScalarType S;
+  typedef RealType   R;
 
   static const bool is_vector = true;
 
@@ -135,9 +144,11 @@ struct VectorAbstraction< Dune::FieldVector< K, SIZE > >
 template< class K, int SIZE >
 struct VectorAbstraction< Dune::Stuff::Common::FieldVector< K, SIZE > >
 {
-  typedef Dune::Stuff::Common::FieldVector< K, SIZE > VectorType;
-  typedef K                                           ScalarType;
-  typedef ScalarType                                  S;
+  typedef Dune::Stuff::Common::FieldVector< K, SIZE >  VectorType;
+  typedef typename Dune::FieldTraits< K >::field_type  ScalarType;
+  typedef typename Dune::FieldTraits< K >::real_type RealType;
+  typedef ScalarType S;
+  typedef RealType   R;
 
   static const bool is_vector = true;
 
