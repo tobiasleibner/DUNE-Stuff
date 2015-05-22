@@ -728,13 +728,23 @@ class FunctionValuedLocalfunctionInterface
   typedef FunctionValuedLocalfunctionInterface< EntityImp, DomainFieldImp, domainDim,
                                                 RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
                                                 RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >         ThisType;
-  typedef LocalfunctionSetInterface< EntityImp, DomainFieldImp, domainDim,
-                                     RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >    LocalfunctionSetInterfaceType;
+
+  template< class R, size_t r, size_t rC>
+  struct RangeRangeTypeSelector
+  {
+    typedef Dune::FieldMatrix< R, r, rC > type;
+  };
+
+  template< class R, size_t r >
+  struct RangeRangeTypeSelector< R, r, 1 >
+  {
+    typedef Dune::FieldVector< R, r > type;
+  };
 
   template< size_t d, class R, size_t r, size_t rC >
   struct RangeJacobianRangeTypeSelector
   {
-    typedef double type;
+    typedef Dune::FieldVector< Dune::FieldMatrix< R, r, d >, rC > type;
   };
 
   template< size_t d, class R, size_t r >
@@ -758,8 +768,8 @@ public:
   static const size_t   rangeDimRangeCols = rangeRangeDimCols;
   typedef Dune::FieldVector< DomainFieldType, dimDomain >            DomainType;
   typedef Dune::FieldVector< RangeDomainFieldType, rangeDimDomain >  RangeDomainType;
-  typedef typename LocalfunctionSetInterfaceType::RangeType          RangeRangeType;
-  typedef RangeJacobianRangeTypeSelector< dimDomain, RangeRangeFieldType, rangeDimRange, rangeDimRangeCols > RangeJacobianRangeType;
+  typedef RangeRangeTypeSelector< RangeRangeFieldType, rangeDimRange, rangeDimRangeCols > RangeRangeType;
+  typedef RangeJacobianRangeTypeSelector< rangeDimDomain, RangeRangeFieldType, rangeDimRange, rangeDimRangeCols > RangeJacobianRangeType;
   typedef LocalizableFunctionInterface< RangeEntityType,
                                         RangeDomainFieldType, rangeDimDomain,
                                         RangeRangeFieldType, rangeDimRange, rangeDimRangeCols >   RangeType;
@@ -831,7 +841,7 @@ protected:
 
 private:
     const EntityType& entity_;
-}; // class FunctionValuedFunctionInterface
+}; // class FunctionValuedLocalfunctionInterface
 
 /**
  * \brief Interface for functions f(x,u) that are localizable in x but not in u
@@ -859,14 +869,14 @@ public:
   typedef typename LocalfunctionType::EntityType                   EntityType;
   typedef typename LocalfunctionType::RangeEntityType              RangeEntityType;
 
-  typedef typename LocalfunctionType::DomainFieldType DomainFieldType;
+  typedef typename LocalfunctionType::DomainFieldType              DomainFieldType;
   static const size_t dimDomain = LocalfunctionType::dimDomain;
 
-  typedef typename LocalfunctionType::RangeDomainFieldType RangeDomainFieldType;
-  typedef typename LocalfunctionType::RangeRangeFieldType RangeRangeFieldType;
-  static const size_t   rangeDimDomain = LocalfunctionType::rangeDimDomain;
-  static const size_t   rangeDimRange = LocalfunctionType::rangeDimRange;
-  static const size_t   rangeDimRangeCols = LocalfunctionType::rangeDimRangeCols;
+  typedef typename LocalfunctionType::RangeDomainFieldType         RangeDomainFieldType;
+  typedef typename LocalfunctionType::RangeRangeFieldType          RangeRangeFieldType;
+  static const size_t rangeDimDomain = LocalfunctionType::rangeDimDomain;
+  static const size_t rangeDimRange = LocalfunctionType::rangeDimRange;
+  static const size_t rangeDimRangeCols = LocalfunctionType::rangeDimRangeCols;
 
   static const bool available = false;
 
@@ -947,11 +957,11 @@ class GlobalFunctionValuedFunctionInterface
                                                     RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >
 {
   typedef GlobalFunctionValuedFunctionInterface< EntityImp, DomainFieldImp, domainDim,
-                                                RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
-                                                RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >         ThisType;
+                                                 RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
+                                                 RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >   ThisType;
   typedef FunctionValuedFunctionInterface< EntityImp, DomainFieldImp, domainDim,
-                                                         RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
-                                                         RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols > BaseType;
+                                           RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
+                                           RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >         BaseType;
 public:
   using typename BaseType::DomainType;
   using typename BaseType::RangeDomainType;
@@ -985,15 +995,15 @@ private:
   class Localfunction
       : public BaseLocalFunctionType
   {
-    typedef typename BaseLocalFunctionType::RangeType BaseRangeType;
+    typedef typename BaseLocalFunctionType::RangeType         BaseRangeType;
     typedef typename BaseLocalFunctionType::JacobianRangeType BaseJacobianRangeType;
 
     typedef GlobalFunctionInterface< RangeEntityType,
                                      RangeDomainFieldType, rangeDimDomain,
-                                     RangeRangeFieldType, rangeDimRange, rangeDimRangeCols >   RangeType;
+                                     RangeRangeFieldType,  rangeDimRange, rangeDimRangeCols >   RangeType;
     typedef GlobalFunctionInterface< RangeEntityType,
                                      RangeDomainFieldType, rangeDimDomain,
-                                     RangeRangeFieldType, rangeDimRangeCols, dimDomain >       JacobianRangeType;
+                                     RangeRangeFieldType,  rangeDimRange, dimDomain >       JacobianRangeType;
   public:
     Localfunction(const EntityImp& entity_in)
       : BaseLocalFunctionType(entity_in)
