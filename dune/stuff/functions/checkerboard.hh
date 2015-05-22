@@ -87,14 +87,16 @@ class Checkerboard
   }; // class Localfunction
 
 public:
-  typedef typename BaseType::EntityType         EntityType;
-  typedef typename BaseType::LocalfunctionType  LocalfunctionType;
+  using typename BaseType::EntityType;
+  using typename BaseType::LocalfunctionType;
 
-  typedef typename BaseType::DomainFieldType  DomainFieldType;
-  static const size_t                         dimDomain = BaseType::dimDomain;
+  using typename BaseType::DomainFieldType;
+  using BaseType::dimDomain;
 
-  typedef typename BaseType::RangeFieldType RangeFieldType;
-  typedef typename BaseType::RangeType      RangeType;
+  using typename BaseType::RangeFieldType;
+  using BaseType::dimRange;
+  using BaseType::dimRangeCols;
+  using typename BaseType::RangeType;
 
   static const bool available = true;
 
@@ -110,7 +112,6 @@ public:
     config["upper_right"] = "[1.0 1.0 1.0]";
     config["num_elements"] = "[2 2 2]";
     config["values"] = "[1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0]";
-    config["values_are_vectors"] = "false";
     config["name"] = static_id();
     if (sub_name.empty())
       return config;
@@ -134,12 +135,28 @@ public:
     for (size_t ii = 0; ii < num_elements.size(); ++ii)
       num_values *= num_elements[ii];
     std::vector< RangeType > values(num_values);
-    const bool values_are_vectors = cfg.get("values_are_vectors", default_cfg.get< bool >("values_are_vectors"));
-    if (values_are_vectors) {
-      auto values_matrix = cfg.get("values", default_cfg.get< Dune::DynamicMatrix< RangeFieldType > >("values"), num_values, rangeDim);
-      for (size_t ii = 0; ii < num_values; ++ii)
-        values[ii] = RangeType(values_matrix[ii]);
+    if (config.has_key("values.0")) { // get every value from its own config entry
+      try { // get value directly as RangeType
+        for (size_t ii = 0; ii < num_values; ++ii)
+          values[ii] = cfg.get< RangeType >("values." + DSC::toString(ii),
+                                            dimRange,
+                                            dimRangeCols);
+      } catch (const Exceptions::conversion_error& e) {
+        if (dimRangeCols == 1) { // get every value from its own config entry as the first col of a matrix
+          for (size_t ii = 0; ii < num_values; ++ii) {
+            const auto values_matrix = cfg.get< Common::FieldMatrix< RangeFieldType, dimRange, 1 > >("values." + DSC::toString(ii),
+                                                                                                     dimRange,
+                                                                                                     1);
+            // this fromString(toString(...)) construct avoids a compilation error if dimRangeCols > 1 and is easier
+            // than creating templated helper methods
+            values[ii] = DSC::fromString< RangeType >(DSC::toString(values_matrix[ii]));
+          }
+        } else {
+          std::cout << e.what() << std::endl;
+        }
+      }
     } else {
+      // get values as a vector of scalars
       auto values_rf = cfg.get("values", default_cfg.get< std::vector< RangeFieldType > >("values"), num_values);
       for (size_t ii = 0; ii < values_rf.size(); ++ii)
         values[ii] = RangeType(values_rf[ii]);
