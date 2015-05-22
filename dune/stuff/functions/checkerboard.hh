@@ -87,14 +87,16 @@ class Checkerboard
   }; // class Localfunction
 
 public:
-  typedef typename BaseType::EntityType         EntityType;
-  typedef typename BaseType::LocalfunctionType  LocalfunctionType;
+  using typename BaseType::EntityType;
+  using typename BaseType::LocalfunctionType;
 
-  typedef typename BaseType::DomainFieldType  DomainFieldType;
-  static const size_t                         dimDomain = BaseType::dimDomain;
+  using typename BaseType::DomainFieldType;
+  using BaseType::dimDomain;
 
-  typedef typename BaseType::RangeFieldType RangeFieldType;
-  typedef typename BaseType::RangeType      RangeType;
+  using typename BaseType::RangeFieldType;
+  using BaseType::dimRange;
+  using BaseType::dimRangeCols;
+  using typename BaseType::RangeType;
 
   static const bool available = true;
 
@@ -110,7 +112,6 @@ public:
     config["upper_right"] = "[1.0 1.0 1.0]";
     config["num_elements"] = "[2 2 2]";
     config["values"] = "[1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0]";
-    config["values_are_vectors"] = "false";
     config["name"] = static_id();
     if (sub_name.empty())
       return config;
@@ -134,12 +135,28 @@ public:
     for (size_t ii = 0; ii < num_elements.size(); ++ii)
       num_values *= num_elements[ii];
     std::vector< RangeType > values(num_values);
-    const bool values_are_vectors = cfg.get("values_are_vectors", default_cfg.get< bool >("values_are_vectors"));
-    if (values_are_vectors) {
-      auto values_matrix = cfg.get("values", default_cfg.get< Dune::DynamicMatrix< RangeFieldType > >("values"), num_values, rangeDim);
-      for (size_t ii = 0; ii < num_values; ++ii)
-        values[ii] = RangeType(values_matrix[ii]);
+    if (config.has_key("values.0")) { // get every value from its own config entry
+      try { // get value directly as RangeType
+        for (size_t ii = 0; ii < num_values; ++ii)
+          values[ii] = cfg.get< RangeType >("values." + DSC::toString(ii),
+                                            dimRange,
+                                            dimRangeCols);
+      } catch (const Exceptions::conversion_error& e) {
+        if (dimRangeCols == 1) { // get every value from its own config entry as the first col of a matrix
+          for (size_t ii = 0; ii < num_values; ++ii) {
+            const auto values_matrix = cfg.get< Common::FieldMatrix< RangeFieldType, dimRange, 1 > >("values." + DSC::toString(ii),
+                                                                                                     dimRange,
+                                                                                                     1);
+            // this fromString(toString(...)) construct avoids a compilation error if dimRangeCols > 1 and is easier
+            // than creating templated helper methods
+            values[ii] = DSC::fromString< RangeType >(DSC::toString(values_matrix[ii]));
+          }
+        } else {
+          std::cout << e.what() << std::endl;
+        }
+      }
     } else {
+      // get values as a vector of scalars
       auto values_rf = cfg.get("values", default_cfg.get< std::vector< RangeFieldType > >("values"), num_values);
       for (size_t ii = 0; ii < values_rf.size(); ++ii)
         values[ii] = RangeType(values_rf[ii]);
@@ -236,15 +253,15 @@ template< class EntityImp, class DomainFieldImp, size_t domainDim,
           class RangeRangeFieldImp, size_t rangeRangeDim, size_t rangeRangeDimCols = 1 >
 class ExpressionCheckerboard
   : public GlobalFunctionValuedFunctionInterface< EntityImp, DomainFieldImp, domainDim,
-                                            RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
-                                            RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >
+                                                  RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
+                                                  RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >
 {
   typedef GlobalFunctionValuedFunctionInterface< EntityImp, DomainFieldImp, domainDim,
-                                           RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
-                                           RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >       BaseType;
+                                                 RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
+                                                 RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >   BaseType;
   typedef ExpressionCheckerboard< EntityImp, DomainFieldImp, domainDim,
                                   RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
-                                  RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >                ThisType;
+                                  RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >                  ThisType;
 public:
   using typename BaseType::DomainType;
   using typename BaseType::RangeDomainType;
@@ -291,12 +308,12 @@ private:
       return 10;
     }
 
-    virtual void evaluate(const DomainType& xx, std::shared_ptr< const RangeType >& ret) const override
+    virtual void evaluate(const DomainType& /*xx*/, std::shared_ptr< const RangeType >& ret) const override
     {
       ret = std::shared_ptr< const RangeType >(value_);
     }
 
-    virtual void jacobian(const DomainType& xx, std::shared_ptr< const JacobianRangeType >& ret) const override
+    virtual void jacobian(const DomainType& /*xx*/, std::shared_ptr< const JacobianRangeType >& /*ret*/) const override
     {
       DUNE_THROW(Dune::NotImplemented, "Not implemented");
     }
@@ -320,7 +337,6 @@ public:
     config["num_elements"] = "[2 2 2]";
     config["variable"] = "u";
     config["values"] = "[1.0*u[0] 2.0*u[0] 3.0*sin(u[0]) 4.0 5.0 6.0*cos(u[0]) 7.0 8.0]";
-    config["values_are_vectors"] = "false";
     config["name"] = static_id();
     if (sub_name.empty())
       return config;
@@ -343,20 +359,38 @@ public:
     size_t num_values = 1;
     for (size_t ii = 0; ii < num_elements.size(); ++ii)
       num_values *= num_elements[ii];
-    std::vector< ExpressionFunctionType > values;
     const std::string variable = cfg.get("variable",   default_cfg.get< std::string >("variable"));
-    const bool values_are_vectors = cfg.get("values_are_vectors", default_cfg.get< bool >("values_are_vectors"));
-    if (values_are_vectors) {
-      auto values_matrix = cfg.get("values", default_cfg.get< Dune::DynamicMatrix< std::string > >("values"), num_values, rangeDimRange);
-      for (size_t ii = 0; ii < num_values; ++ii) {
-        // get row
-        const auto& row = values_matrix[ii];
-        std::vector< std::string > std_row(rangeDimRange);
-        for (size_t jj = 0; jj < rangeDimRange; ++jj)
-          std_row[jj] = row[jj];
-        values.emplace_back(ExpressionFunctionType(variable, std_row));
+    std::vector< ExpressionFunctionType > values;
+    if (config.has_key("values.0")) { // get every value from its own config entry
+      try { // get value as matrix
+        std::vector< std::string > row_as_std_vector;
+        for (size_t ii = 0; ii < num_values; ++ii) {
+          const auto values_matrix = cfg.get< Dune::DynamicMatrix< std::string > >("values." + DSC::toString(ii),
+                                                                                   rangeDimRange,
+                                                                                   rangeDimRangeCols);
+          typename ExpressionFunctionType::ExpressionStringVectorType expression_vector;
+          for (size_t rr = 0; rr < rangeDimRange; ++rr) {
+            const auto row = values_matrix[rr];
+            for (size_t cc = 0; cc < rangeDimRangeCols; ++cc)
+              row_as_std_vector[cc] = row[cc];
+            expression_vector.emplace_back(row_as_std_vector);
+          }
+         values.emplace_back(ExpressionFunctionType(variable, expression_vector));
+        }
+      } catch (const Exceptions::conversion_error& e) {
+        if (rangeDimRangeCols == 1) { // get value as vector
+          for (size_t ii = 0; ii < num_values; ++ii) {
+            const auto values_vector = cfg.get< std::vector< std::string > >("values." + DSC::toString(ii),
+                                                                             rangeDimRange);
+            typename ExpressionFunctionType::ExpressionStringVectorType expression_vector(1, values_vector);
+            values.emplace_back(ExpressionFunctionType(variable, expression_vector));
+          }
+        } else {
+          std::cout << e.what() << std::endl;
+        }
       }
     } else {
+      // get values as a vector of scalars
       auto values_rf = cfg.get("values", default_cfg.get< std::vector< std::string > >("values"), num_values);
       for (size_t ii = 0; ii < values_rf.size(); ++ii)
         values.emplace_back(ExpressionFunctionType(variable, values_rf[ii]));
