@@ -382,8 +382,7 @@ public:
           for (size_t ii = 0; ii < num_values; ++ii) {
             const auto values_vector = cfg.get< std::vector< std::string > >("values." + DSC::toString(ii),
                                                                              rangeDimRange);
-            typename ExpressionFunctionType::ExpressionStringVectorType expression_vector(1, values_vector);
-            values.emplace_back(ExpressionFunctionType(variable, expression_vector));
+            values.emplace_back(ExpressionFunctionType(variable, values_vector));
           }
         } else {
           std::cout << e.what() << std::endl;

@@ -719,6 +719,8 @@ private:
 
 /**
  *  \brief  Interface for functions, which can be partially evaluated locally on one Entity
+ *
+ *  \todo   think about JacobianRangeType and implement jacobian methods properly (unusable by now)
  */
 template< class EntityImp, class DomainFieldImp, size_t domainDim,
           class RangeEntityImp, class RangeDomainFieldImp, size_t rangeDomainDim,
@@ -768,14 +770,17 @@ public:
   static const size_t   rangeDimRangeCols = rangeRangeDimCols;
   typedef Dune::FieldVector< DomainFieldType, dimDomain >            DomainType;
   typedef Dune::FieldVector< RangeDomainFieldType, rangeDimDomain >  RangeDomainType;
-  typedef RangeRangeTypeSelector< RangeRangeFieldType, rangeDimRange, rangeDimRangeCols > RangeRangeType;
-  typedef RangeJacobianRangeTypeSelector< rangeDimDomain, RangeRangeFieldType, rangeDimRange, rangeDimRangeCols > RangeJacobianRangeType;
+  typedef typename RangeRangeTypeSelector< RangeRangeFieldType, rangeDimRange, rangeDimRangeCols >::type RangeRangeType;
+  typedef typename RangeJacobianRangeTypeSelector< rangeDimDomain,
+                                                   RangeRangeFieldType,
+                                                   rangeDimRange,
+                                                   rangeDimRangeCols >::type                     RangeJacobianRangeType;
   typedef LocalizableFunctionInterface< RangeEntityType,
                                         RangeDomainFieldType, rangeDimDomain,
-                                        RangeRangeFieldType, rangeDimRange, rangeDimRangeCols >   RangeType;
+                                        RangeRangeFieldType, rangeDimRange, rangeDimRangeCols >  RangeType;
   typedef LocalizableFunctionInterface< RangeEntityType,
                                         RangeDomainFieldType, rangeDimDomain,
-                                        RangeRangeFieldType, rangeDimRangeCols, dimDomain >       JacobianRangeType;
+                                        RangeRangeFieldType, rangeDimRange, dimDomain >      JacobianRangeType;
 
   FunctionValuedLocalfunctionInterface(const EntityType& ent)
     : entity_(ent)
@@ -985,7 +990,7 @@ public:
                                    RangeRangeFieldType, rangeDimRange, rangeDimRangeCols >   RangeType;
   typedef GlobalFunctionInterface< RangeEntityType,
                                    RangeDomainFieldType, rangeDimDomain,
-                                   RangeRangeFieldType, rangeDimRangeCols, dimDomain >       JacobianRangeType;
+                                   RangeRangeFieldType, rangeDimRange, dimDomain >       JacobianRangeType;
 
   static const bool available = false;
 
@@ -1017,14 +1022,14 @@ private:
     {
       std::shared_ptr< const RangeType > derived;
       evaluate(xx, derived);
-      ret = std::shared_ptr< const BaseRangeType >(derived);
+      ret = derived;
     }
 
     virtual void jacobian(const DomainType& xx, std::shared_ptr< const BaseJacobianRangeType >& ret) const override final
     {
       std::shared_ptr< const JacobianRangeType > derived;
       jacobian(xx, derived);
-      ret = std::shared_ptr< const BaseJacobianRangeType >(derived);
+      ret = derived;
     }
 
     std::shared_ptr< const RangeType > evaluate(const DomainType& xx) const
