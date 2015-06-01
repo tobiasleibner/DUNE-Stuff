@@ -485,10 +485,10 @@ public:
    * \brief Creates a TimeDependentExpression function where every component is identical
    */
   TimeDependentExpression(const std::string variable,
-             const std::string expression,
-             const size_t ord = 0,
-             const std::string nm = static_id(),
-             const std::vector< std::string > gradient = std::vector< std::string >())
+                          const std::string expression,
+                          const size_t ord = 0,
+                          const std::string nm = static_id(),
+                          const std::vector< std::string > gradient = std::vector< std::string >())
     : variable_(variable)
     , order_(ord)
     , name_(nm)
@@ -498,25 +498,25 @@ public:
     const ExpressionStringVectorType expressions(dimRange, expression_row);
     // create associated gradient vector
     GradientStringVectorType gradient_expressions(dimRangeCols);
-    assert(gradient.size() >= dimDomain);
+    assert(gradient.size() == 0 || gradient.size() >= dimDomain);
     const ExpressionStringVectorType gradient_row(dimRange, gradient);
     for (size_t cc = 0; cc < dimRangeCols; ++cc) {
       gradient_expressions[cc] = gradient_row;
     }
     // copy to member variables
     expressions_ = expressions;
-    gradient_expressions_(gradient_expressions);
+    gradient_expressions_ = gradient_expressions;
   }
 
   /**
    * \brief Creates a TimeDependentExpression function with dimRangeCols = 1
    */
   TimeDependentExpression(const std::string variable,
-             const std::vector< std::string > expressions,
-             const size_t ord = default_config().get< size_t >("order"),
-             const std::string nm = static_id(),
-             const std::vector< std::vector< std::string > > gradient_expressions
-                = std::vector< std::vector< std::string > >())
+                          const std::vector< std::string > expressions,
+                          const size_t ord = default_config().get< size_t >("order"),
+                          const std::string nm = static_id(),
+                          const std::vector< std::vector< std::string > > gradient_expressions
+                                     = std::vector< std::vector< std::string > >())
     : variable_(variable)
     , order_(ord)
     , name_(nm)
@@ -534,11 +534,11 @@ public:
    * \brief Creates a TimeDependentExpression function
    */
   TimeDependentExpression(const std::string variable,
-             const ExpressionStringVectorType expressions,
-             const size_t ord = 0,
-             const std::string nm = static_id(),
-             const GradientStringVectorType gradient_expressions
-                = GradientStringVectorType())
+                          const ExpressionStringVectorType expressions,
+                          const size_t ord = 0,
+                          const std::string nm = static_id(),
+                          const GradientStringVectorType gradient_expressions
+                                        = GradientStringVectorType())
     : variable_(variable)
     , order_(ord)
     , name_(nm)
