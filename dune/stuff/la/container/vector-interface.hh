@@ -385,7 +385,7 @@ public:
    *  \param  alpha The scalar.
    *  \return The scaled copy of this.
    */
-  virtual derived_type operator*(const ScalarType& alpha)
+  virtual derived_type operator*(const ScalarType& alpha) const
   {
     derived_type ret = this->copy();
     ret *= alpha;
@@ -398,7 +398,7 @@ public:
    *  \return The scalar product.
    *  \see dot()
    */
-  virtual ScalarType operator*(const derived_type& other)
+  virtual ScalarType operator*(const derived_type& other) const
   {
     return dot(other);
   }
