@@ -18,6 +18,7 @@
 
 #include "interfaces.hh"
 #include "expression.hh"
+#include "affine.hh"
 
 namespace Dune {
 namespace Stuff {
@@ -400,8 +401,8 @@ public:
                     default_cfg.get< Common::FieldVector< DomainFieldType, dimDomain > >("lower_left"), dimDomain),
             cfg.get("upper_right",
                     default_cfg.get< Common::FieldVector< DomainFieldType, dimDomain > >("upper_right"), dimDomain),
-            std::move(num_elements),
-            std::move(values),
+            num_elements,
+            values,
             cfg.get("name", default_cfg.get< std::string > ("name")));
   } // ... create(...)
 
@@ -479,6 +480,213 @@ private:
   std::shared_ptr< const std::vector< ExpressionFunctionType > > values_;
   std::string name_;
 }; // class ExpressionCheckerboard
+
+
+template< class EntityImp, class DomainFieldImp, size_t domainDim,
+          class RangeEntityImp, class RangeDomainFieldImp, size_t rangeDomainDim,
+          class RangeRangeFieldImp, size_t rangeRangeDim, size_t rangeRangeDimCols = 1 >
+class AffineCheckerboard
+  : public GlobalFunctionValuedFunctionInterface< EntityImp, DomainFieldImp, domainDim,
+                                                  RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
+                                                  RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >
+{
+  typedef GlobalFunctionValuedFunctionInterface< EntityImp, DomainFieldImp, domainDim,
+                                                 RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
+                                                 RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >   BaseType;
+  typedef AffineCheckerboard< EntityImp, DomainFieldImp, domainDim,
+                                  RangeEntityImp, RangeDomainFieldImp, rangeDomainDim,
+                                  RangeRangeFieldImp, rangeRangeDim, rangeRangeDimCols >                  ThisType;
+public:
+  using typename BaseType::DomainType;
+  using typename BaseType::RangeDomainType;
+  using typename BaseType::RangeRangeType;
+  using typename BaseType::RangeJacobianRangeType;
+  using typename BaseType::RangeType;
+  using typename BaseType::JacobianRangeType;
+  using typename BaseType::EntityType;
+  using typename BaseType::RangeEntityType;
+  using typename BaseType::LocalfunctionType;
+
+  using typename BaseType::DomainFieldType;
+  using BaseType::dimDomain;
+
+  using typename BaseType::RangeDomainFieldType;
+  using typename BaseType::RangeRangeFieldType;
+  using BaseType::rangeDimDomain;
+  using BaseType::rangeDimRange;
+  using BaseType::rangeDimRangeCols;
+
+  static const bool available = true;
+
+  typedef Affine< RangeEntityType,
+                      RangeDomainFieldType, rangeDimDomain,
+                      RangeRangeFieldType, rangeDimRange, rangeDimRangeCols >         AffineFunctionType;
+  typedef typename AffineFunctionType::MatrixType                                     MatrixType;
+  typedef typename AffineFunctionType::LocalfunctionType                              AffineLocalfunctionType;
+
+private:
+  class Localfunction
+    : public LocalfunctionType
+  {
+  public:
+    Localfunction(const EntityType& ent, const AffineFunctionType& value)
+      : LocalfunctionType(ent)
+      , value_(std::make_shared< AffineFunctionType >(value))
+    {}
+
+    Localfunction(const Localfunction& /*other*/) = delete;
+
+    Localfunction& operator=(const Localfunction& /*other*/) = delete;
+
+    virtual size_t order() const override
+    {
+      return 10;
+    }
+
+    virtual void evaluate(const DomainType& /*xx*/, std::shared_ptr< const RangeType >& ret) const override
+    {
+      ret = std::shared_ptr< const RangeType >(value_);
+    }
+
+    virtual void jacobian(const DomainType& /*xx*/, std::shared_ptr< const JacobianRangeType >& /*ret*/) const override
+    {
+      DUNE_THROW(Dune::NotImplemented, "Not implemented");
+    }
+
+  private:
+    const std::shared_ptr< const AffineFunctionType > value_;
+  }; // class Localfunction
+
+public:
+
+  static std::string static_id()
+  {
+    return BaseType::static_id() + ".affinecheckerboard";
+  }
+
+  static Common::Configuration default_config(const std::string sub_name = "")
+  {
+    Common::Configuration config;
+    config["lower_left"] = "[0.0 0.0 0.0]";
+    config["upper_right"] = "[1.0 1.0 1.0]";
+    config["num_elements"] = "[2 1 1]";
+    config["A.0"] = "[1 0 0; 0 1 0; 0 0 1]";
+    config["A.1"] = "[1 2 3; 4 5 6; 7 8 9]";
+    config["b.0"] = "[1 2 3]";
+    config["b.1"] = "[0 0 0]";
+    config["name"] = static_id();
+    if (sub_name.empty())
+      return config;
+    else {
+      Common::Configuration tmp;
+      tmp.add(config, sub_name);
+      return tmp;
+    }
+  } // ... default_config(...)
+
+  static std::unique_ptr< ThisType > create(const Common::Configuration config = default_config(),
+                                            const std::string sub_name = static_id())
+  {
+    // get correct config
+    const Common::Configuration cfg = config.has_sub(sub_name) ? config.sub(sub_name) : config;
+    const Common::Configuration default_cfg = default_config();
+    // calculate number of values and get values
+    auto num_elements = cfg.get("num_elements",
+                                default_cfg.get< Common::FieldVector< size_t, dimDomain > >("num_elements"), dimDomain);
+    size_t num_values = 1;
+    for (size_t ii = 0; ii < num_elements.size(); ++ii)
+      num_values *= num_elements[ii];
+    std::vector< AffineFunctionType > values;
+    for (size_t ii = 0; ii < num_values; ++ii) {
+      const MatrixType A_ii = cfg.get< MatrixType >("A." + DSC::toString(ii), rangeDimRange, rangeDimDomain);
+      const RangeRangeType b_ii = cfg.get< RangeRangeType >("b." + DSC::toString(ii), rangeDimRange);
+      values.emplace_back(AffineFunctionType(A_ii, b_ii));
+    }
+    // create
+    return Common::make_unique< ThisType >(
+            cfg.get("lower_left",
+                    default_cfg.get< Common::FieldVector< DomainFieldType, dimDomain > >("lower_left"), dimDomain),
+            cfg.get("upper_right",
+                    default_cfg.get< Common::FieldVector< DomainFieldType, dimDomain > >("upper_right"), dimDomain),
+            num_elements,
+            values,
+            cfg.get("name", default_cfg.get< std::string > ("name")));
+  } // ... create(...)
+
+  AffineCheckerboard(const Common::FieldVector< DomainFieldType, dimDomain >& lowerLeft,
+               const Common::FieldVector< DomainFieldType, dimDomain >& upperRight,
+               const Common::FieldVector< size_t, dimDomain >& numElements,
+               const std::vector< AffineFunctionType >& values,
+               const std::string nm = static_id())
+    : lowerLeft_(new Common::FieldVector< DomainFieldType, dimDomain >(lowerLeft))
+    , upperRight_(new Common::FieldVector< DomainFieldType, dimDomain >(upperRight))
+    , numElements_(new Common::FieldVector< size_t, dimDomain >(numElements))
+    , values_(new std::vector< AffineFunctionType >(values))
+    , name_(nm)
+  {
+    // checks
+    size_t totalSubdomains = 1;
+    for (size_t dd = 0; dd < dimDomain; ++dd) {
+      const auto& ll = (*lowerLeft_)[dd];
+      const auto& ur = (*upperRight_)[dd];
+      const auto& ne = (*numElements_)[dd];
+      if (!(ll < ur))
+        DUNE_THROW(Dune::RangeError, "lowerLeft has to be elementwise smaller than upperRight!");
+      totalSubdomains *= ne;
+    }
+    if (values_->size() < totalSubdomains)
+      DUNE_THROW(Dune::RangeError,
+                 "values too small (is " << values_->size() << ", should be " << totalSubdomains << ")");
+  } // Checkerboard(...)
+
+  AffineCheckerboard(const ThisType& other) = default;
+
+  ThisType& operator=(const ThisType& other) = delete;
+
+  ThisType& operator=(ThisType&& source) = delete;
+
+  virtual std::string type() const override
+  {
+    return BaseType::static_id() + ".affinecheckerboard";
+  }
+
+  virtual std::string name() const override
+  {
+    return name_;
+  }
+
+  virtual std::unique_ptr< LocalfunctionType > local_global_function(const EntityType& entity) const override
+  {
+    // decide on the subdomain the center of the entity belongs to
+    const auto center = entity.geometry().center();
+    std::vector< size_t > whichPartition(dimDomain, 0);
+    const auto& ll = *lowerLeft_;
+    const auto& ur = *upperRight_;
+    const auto& ne = *numElements_;
+    for (size_t dd = 0; dd < dimDomain; ++dd) {
+      // for points that are on upperRight_[d], this selects one partition too much
+      // so we need to cap this
+      whichPartition[dd] = std::min(size_t(std::floor(ne[dd]*((center[dd] - ll[dd])/(ur[dd] - ll[dd])))),
+                                    ne[dd] - 1);
+    }
+    size_t subdomain = 0;
+    if (dimDomain == 1)
+      subdomain = whichPartition[0];
+    else if (dimDomain == 2)
+      subdomain = whichPartition[0] + whichPartition[1]*ne[0];
+    else
+      subdomain = whichPartition[0] + whichPartition[1]*ne[0] + whichPartition[2]*ne[1]*ne[0];
+    // return the component that belongs to the subdomain
+    return std::unique_ptr< Localfunction >(new Localfunction(entity, (*values_)[subdomain]));
+  } // ... local_function(...)
+
+private:
+  std::shared_ptr< const Common::FieldVector< DomainFieldType, dimDomain > > lowerLeft_;
+  std::shared_ptr< const Common::FieldVector< DomainFieldType, dimDomain > > upperRight_;
+  std::shared_ptr< const Common::FieldVector< size_t, dimDomain > > numElements_;
+  std::shared_ptr< const std::vector< AffineFunctionType > > values_;
+  std::string name_;
+}; // class AffineCheckerboard
 
 
 } // namespace Functions
