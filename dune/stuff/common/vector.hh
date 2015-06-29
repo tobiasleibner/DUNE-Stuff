@@ -3,8 +3,8 @@
 // Copyright holders: Rene Milk, Felix Schindler
 // License: BSD 2-Clause License (http://opensource.org/licenses/BSD-2-Clause)
 
-#ifndef DUNE_STUFF_TOOLS_COMMON_VECTOR_HH
-#define DUNE_STUFF_TOOLS_COMMON_VECTOR_HH
+#ifndef DUNE_STUFF_COMMON_VECTOR_HH
+#define DUNE_STUFF_COMMON_VECTOR_HH
 
 #include <vector>
 #include <ostream>
@@ -14,8 +14,6 @@
 #include <dune/common/ftraits.hh>
 
 #include <dune/stuff/common/exceptions.hh>
-#include <dune/stuff/common/float_cmp.hh>
-#include <dune/stuff/common/fvector.hh>
 #include <dune/stuff/common/type_utils.hh>
 
 
@@ -24,11 +22,22 @@ namespace Stuff {
 namespace Common {
 
 
+template< class VecType >
+struct VectorAbstraction;
+
+//! logically and structurally this belongs in type_utils.hh, but the dependent implementation prohibits that
+template< class VectorType >
+struct is_vector
+{
+  static const bool value = VectorAbstraction< VectorType >::is_vector;
+};
+
+
 /**
  * \brief Traits to statically extract information of a (mathematical) vector.
  *
  *        If you want your vector class to benefit from the operators defined in this header you have to manually
- *        specify a specialization of this class in your code with is_vector defined to true and an appropriate
+ *        specify a specialization of this class in your code with is_vector defined to true and the appropriate
  *        static methods and members (see the specializations below).
  */
 template< class VecType >
@@ -141,32 +150,6 @@ struct VectorAbstraction< Dune::FieldVector< K, SIZE > >
   }
 };
 
-template< class K, int SIZE >
-struct VectorAbstraction< Dune::Stuff::Common::FieldVector< K, SIZE > >
-{
-  typedef Dune::Stuff::Common::FieldVector< K, SIZE >  VectorType;
-  typedef typename Dune::FieldTraits< K >::field_type  ScalarType;
-  typedef typename Dune::FieldTraits< K >::real_type RealType;
-  typedef ScalarType S;
-  typedef RealType   R;
-
-  static const bool is_vector = true;
-
-  static const bool has_static_size = true;
-
-  static const  size_t static_size = SIZE;
-
-  static inline VectorType create(const size_t sz)
-  {
-    return VectorType(sz);
-  }
-
-  static inline VectorType create(const size_t sz, const ScalarType& val)
-  {
-    return VectorType(sz, val);
-  }
-};
-
 template< class VectorType >
     typename std::enable_if< is_vector< VectorType >::value, VectorType >::type
 create(const size_t sz,
@@ -186,6 +169,7 @@ inline
     typename std::enable_if<    Dune::Stuff::Common::is_vector< L >::value
                              && Dune::Stuff::Common::is_vector< R >::value
                            , bool >::value
+DUNE_DEPRECATED_MSG("vector operator overloads to be removed. If you want FloatCmp bevahior cal the appropiate DSC::FloatCmp::XX function instead")
 operator<(const L& lhs, const R& rhs)
 {
   return Dune::Stuff::Common::FloatCmp::lt(lhs, rhs);
@@ -196,6 +180,7 @@ inline
     typename std::enable_if<    Dune::Stuff::Common::is_vector< L >::value
                              && Dune::Stuff::Common::is_vector< R >::value
                            , bool >::value
+DUNE_DEPRECATED_MSG("vector operator overloads to be removed. If you want FloatCmp bevahior cal the appropiate DSC::FloatCmp::XX function instead")
 operator>(const L& lhs, const R& rhs)
 {
   return Dune::Stuff::Common::FloatCmp::gt(lhs, rhs);
@@ -206,6 +191,7 @@ inline
     typename std::enable_if<    Dune::Stuff::Common::is_vector< L >::value
                              && Dune::Stuff::Common::is_vector< R >::value
                            , bool >::value
+DUNE_DEPRECATED_MSG("vector operator overloads to be removed. If you want FloatCmp bevahior cal the appropiate DSC::FloatCmp::XX function instead")
 operator<=(const L& lhs, const R& rhs)
 {
   return Dune::Stuff::Common::FloatCmp::le(lhs, rhs);
@@ -216,6 +202,7 @@ inline
     typename std::enable_if<    Dune::Stuff::Common::is_vector< L >::value
                              && Dune::Stuff::Common::is_vector< R >::value
                            , bool >::value
+DUNE_DEPRECATED_MSG("vector operator overloads to be removed. If you want FloatCmp bevahior cal the appropiate DSC::FloatCmp::XX function instead")
 operator>=(const L& lhs, const R& rhs)
 {
   return Dune::Stuff::Common::FloatCmp::ge(lhs, rhs);
@@ -226,6 +213,7 @@ inline
     typename std::enable_if<    Dune::Stuff::Common::is_vector< L >::value
                              && Dune::Stuff::Common::is_vector< R >::value
                            , bool >::value
+DUNE_DEPRECATED_MSG("vector operator overloads to be removed. If you want FloatCmp bevahior cal the appropiate DSC::FloatCmp::XX function instead")
 operator==(const L& lhs, const R& rhs)
 {
   return Dune::Stuff::Common::FloatCmp::eq(lhs, rhs);
@@ -236,6 +224,7 @@ inline
     typename std::enable_if<    Dune::Stuff::Common::is_vector< L >::value
                              && Dune::Stuff::Common::is_vector< R >::value
                            , bool >::value
+DUNE_DEPRECATED_MSG("vector operator overloads to be removed. If you want FloatCmp bevahior cal the appropiate DSC::FloatCmp::XX function instead")
 operator!=(const L& lhs, const R& rhs)
 {
   return Dune::Stuff::Common::FloatCmp::ne(lhs, rhs);
@@ -290,4 +279,4 @@ operator<<(std::ostream& out, const V& vec)
 } // ... operator<<(...)
 
 
-#endif // DUNE_STUFF_TOOLS_COMMON_VECTOR_HH
+#endif // DUNE_STUFF_COMMON_VECTOR_HH
