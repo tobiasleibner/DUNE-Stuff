@@ -15,6 +15,7 @@
 
 #include <dune/stuff/common/exceptions.hh>
 #include <dune/stuff/common/type_utils.hh>
+#include <dune/stuff/common/float_cmp.hh>
 
 
 namespace Dune {
@@ -162,73 +163,6 @@ create(const size_t sz,
 } // namespace Common
 } // namespace Stuff
 } // namespace Dune
-
-
-template< class L, class R >
-inline
-    typename std::enable_if<    Dune::Stuff::Common::is_vector< L >::value
-                             && Dune::Stuff::Common::is_vector< R >::value
-                           , bool >::value
-DUNE_DEPRECATED_MSG("vector operator overloads to be removed. If you want FloatCmp bevahior cal the appropiate DSC::FloatCmp::XX function instead")
-operator<(const L& lhs, const R& rhs)
-{
-  return Dune::Stuff::Common::FloatCmp::lt(lhs, rhs);
-}
-
-template< class L, class R >
-inline
-    typename std::enable_if<    Dune::Stuff::Common::is_vector< L >::value
-                             && Dune::Stuff::Common::is_vector< R >::value
-                           , bool >::value
-DUNE_DEPRECATED_MSG("vector operator overloads to be removed. If you want FloatCmp bevahior cal the appropiate DSC::FloatCmp::XX function instead")
-operator>(const L& lhs, const R& rhs)
-{
-  return Dune::Stuff::Common::FloatCmp::gt(lhs, rhs);
-}
-
-template< class L, class R >
-inline
-    typename std::enable_if<    Dune::Stuff::Common::is_vector< L >::value
-                             && Dune::Stuff::Common::is_vector< R >::value
-                           , bool >::value
-DUNE_DEPRECATED_MSG("vector operator overloads to be removed. If you want FloatCmp bevahior cal the appropiate DSC::FloatCmp::XX function instead")
-operator<=(const L& lhs, const R& rhs)
-{
-  return Dune::Stuff::Common::FloatCmp::le(lhs, rhs);
-}
-
-template< class L, class R >
-inline
-    typename std::enable_if<    Dune::Stuff::Common::is_vector< L >::value
-                             && Dune::Stuff::Common::is_vector< R >::value
-                           , bool >::value
-DUNE_DEPRECATED_MSG("vector operator overloads to be removed. If you want FloatCmp bevahior cal the appropiate DSC::FloatCmp::XX function instead")
-operator>=(const L& lhs, const R& rhs)
-{
-  return Dune::Stuff::Common::FloatCmp::ge(lhs, rhs);
-}
-
-template< class L, class R >
-inline
-    typename std::enable_if<    Dune::Stuff::Common::is_vector< L >::value
-                             && Dune::Stuff::Common::is_vector< R >::value
-                           , bool >::value
-DUNE_DEPRECATED_MSG("vector operator overloads to be removed. If you want FloatCmp bevahior cal the appropiate DSC::FloatCmp::XX function instead")
-operator==(const L& lhs, const R& rhs)
-{
-  return Dune::Stuff::Common::FloatCmp::eq(lhs, rhs);
-}
-
-template< class L, class R >
-inline
-    typename std::enable_if<    Dune::Stuff::Common::is_vector< L >::value
-                             && Dune::Stuff::Common::is_vector< R >::value
-                           , bool >::value
-DUNE_DEPRECATED_MSG("vector operator overloads to be removed. If you want FloatCmp bevahior cal the appropiate DSC::FloatCmp::XX function instead")
-operator!=(const L& lhs, const R& rhs)
-{
-  return Dune::Stuff::Common::FloatCmp::ne(lhs, rhs);
-}
 
 
 template< class S, class V >
