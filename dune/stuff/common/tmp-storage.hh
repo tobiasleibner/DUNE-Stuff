@@ -59,7 +59,7 @@ public:
 protected:
   PerThreadValue< LocalMatrixContainerType > matrices_;
   PerThreadValue< std::vector< DynamicVector< size_t > > > indices_;
-}; // class Matrices
+}; // class TmpMatricesStorage
 
 
 template< class FieldType = double >
@@ -94,7 +94,7 @@ public:
 protected:
   PerThreadValue< std::vector< std::vector< LocalVectorType > > > vectors_;
   PerThreadValue< Dune::DynamicVector< size_t > > indices_;
-}; // class Vectors
+}; // class TmpVectorsStorage
 
 
 } // namespace Common
