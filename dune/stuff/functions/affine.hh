@@ -11,6 +11,7 @@
 #include <memory>
 
 #include <dune/stuff/common/configuration.hh>
+#include <dune/stuff/la/container/pattern.hh>
 #include <dune/stuff/functions/constant.hh>
 
 #include "interfaces.hh"
@@ -41,6 +42,7 @@ public:
   typedef typename BaseType::RangeType                                      RangeType;
   typedef typename BaseType::JacobianRangeType                              JacobianRangeType;
   typedef typename Dune::FieldMatrix< RangeFieldImp, rangeDim, domainDim >  MatrixType;
+  typedef typename DS::LA::SparsityPatternDefault                           PatternType;
 
   using typename BaseType::LocalfunctionType;
 
@@ -56,6 +58,7 @@ public:
     Common::Configuration config;
     config["A"] = internal::Get< RangeFieldImp, rangeDim, domainDim >::value_str();
     config["b"] = internal::Get< RangeFieldImp, rangeDim, 1 >::value_str();
+    config["sparse"] = "false";
     config["name"] = static_id();
     if (sub_name.empty())
       return config;
@@ -75,14 +78,21 @@ public:
     return Common::make_unique< ThisType >(
           cfg.get("A", default_cfg.get< MatrixType >("A")),
           cfg.get("b", default_cfg.get< RangeType >("b")),
+          cfg.get("sparse", default_cfg.get< bool >("sparse")),
           cfg.get("name",  default_cfg.get< std::string >("name")));
   } // ... create(...)
 
-  explicit Affine(const MatrixType& matrix, const RangeType& vector = RangeType(0), const std::string name_in = static_id())
+  explicit Affine(const MatrixType& matrix, const RangeType& vector = RangeType(0), const bool sparse = false, const std::string name_in = static_id())
     : A_(matrix)
     , b_(vector)
     , name_(name_in)
-  {}
+    , b_zero_(check_zero(b_))
+    , sparse_(sparse)
+    , pattern_(rangeDim)
+  {
+    if (sparse_)
+      calculate_pattern(A_, pattern_);
+  }
 
   Affine(const ThisType& other) = default;
 
@@ -98,9 +108,19 @@ public:
 
   virtual void evaluate(const DomainType& x, RangeType& ret) const override final
   {
-    A_.mv(x, ret);
-    ret += b_;
-    return ret;
+    if (sparse_) {
+      std::fill(ret.begin(), ret.end(), RangeFieldImp(0));
+      for (size_t ii = 0; ii < rangeDim; ++ii) {
+        const auto& row_pattern = pattern_.inner(ii);
+        for (const auto& jj : row_pattern) {
+          ret[ii] += A_[ii][jj]*x[jj];
+        }
+      }
+    } else {
+      A_.mv(x, ret);
+    }
+    if (!b_zero_)
+      ret += b_;
   }
 
   virtual void jacobian(const DomainType& /*x*/, JacobianRangeType& ret) const override final
@@ -113,9 +133,32 @@ public:
     return name_;
   }
 
+  static bool check_zero(const RangeType& b)
+  {
+    for (const auto& entry : b) {
+      if (DSC::FloatCmp::ne(entry, RangeFieldImp(0)))
+        return false;
+    }
+    return true;
+  }
+
+  static void calculate_pattern(const MatrixType& A, PatternType& pattern)
+  {
+    for (size_t ii = 0; ii < rangeDim; ++ii) {
+      const auto& row = A[ii];
+      for (size_t jj = 0; jj < domainDim; ++jj) {
+        if (DSC::FloatCmp::ne(row[jj], RangeFieldImp(0)))
+          pattern.insert(ii,jj);
+      }
+    }
+  }
+
 private:
   const MatrixType A_;
   const RangeType b_;
+  const bool b_zero_;
+  const bool sparse_;
+  PatternType pattern_;
   const std::string name_;
 };
 
