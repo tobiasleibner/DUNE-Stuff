@@ -364,7 +364,7 @@ public:
     std::vector< ExpressionFunctionType > values;
     if (config.has_key("values.0")) { // get every value from its own config entry
       try { // get value as matrix
-        std::vector< std::string > row_as_std_vector;
+        std::vector< std::string > row_as_std_vector(rangeDimRangeCols);
         for (size_t ii = 0; ii < num_values; ++ii) {
           const auto values_matrix = cfg.get< Dune::DynamicMatrix< std::string > >("values." + DSC::toString(ii),
                                                                                    rangeDimRange,
