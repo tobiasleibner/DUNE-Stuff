@@ -295,9 +295,9 @@ private:
     : public LocalfunctionType
   {
   public:
-    Localfunction(const EntityType& ent, const ExpressionFunctionType& value)
+    Localfunction(const EntityType& ent, const std::shared_ptr< const ExpressionFunctionType >& value)
       : LocalfunctionType(ent)
-      , value_(std::make_shared< ExpressionFunctionType >(value))
+      , value_(value)
     {}
 
     Localfunction(const Localfunction& /*other*/) = delete;
@@ -414,9 +414,11 @@ public:
     : lowerLeft_(new Common::FieldVector< DomainFieldType, dimDomain >(lowerLeft))
     , upperRight_(new Common::FieldVector< DomainFieldType, dimDomain >(upperRight))
     , numElements_(new Common::FieldVector< size_t, dimDomain >(numElements))
-    , values_(new std::vector< ExpressionFunctionType >(values))
     , name_(nm)
   {
+    for (size_t ii = 0; ii < values.size(); ++ii)
+      values_.emplace_back(new ExpressionFunctionType(values[ii]));
+#ifndef NDEBUG
     // checks
     size_t totalSubdomains = 1;
     for (size_t dd = 0; dd < dimDomain; ++dd) {
@@ -427,9 +429,10 @@ public:
         DUNE_THROW(Dune::RangeError, "lowerLeft has to be elementwise smaller than upperRight!");
       totalSubdomains *= ne;
     }
-    if (values_->size() < totalSubdomains)
+    if (values_.size() < totalSubdomains)
       DUNE_THROW(Dune::RangeError,
-                 "values too small (is " << values_->size() << ", should be " << totalSubdomains << ")");
+                 "values too small (is " << values_.size() << ", should be " << totalSubdomains << ")");
+#endif
   } // Checkerboard(...)
 
   ExpressionCheckerboard(const ThisType& other) = default;
@@ -470,14 +473,14 @@ public:
     else
       subdomain = whichPartition[0] + whichPartition[1]*ne[0] + whichPartition[2]*ne[1]*ne[0];
     // return the component that belongs to the subdomain
-    return std::unique_ptr< Localfunction >(new Localfunction(entity, (*values_)[subdomain]));
+    return DSC::make_unique< Localfunction >(entity, values_[subdomain]);
   } // ... local_function(...)
 
 private:
   std::shared_ptr< const Common::FieldVector< DomainFieldType, dimDomain > > lowerLeft_;
   std::shared_ptr< const Common::FieldVector< DomainFieldType, dimDomain > > upperRight_;
   std::shared_ptr< const Common::FieldVector< size_t, dimDomain > > numElements_;
-  std::shared_ptr< const std::vector< ExpressionFunctionType > > values_;
+  std::vector< std::shared_ptr< const ExpressionFunctionType > > values_;
   std::string name_;
 }; // class ExpressionCheckerboard
 
@@ -519,8 +522,8 @@ public:
   static const bool available = true;
 
   typedef Affine< RangeEntityType,
-                      RangeDomainFieldType, rangeDimDomain,
-                      RangeRangeFieldType, rangeDimRange, rangeDimRangeCols >         AffineFunctionType;
+                  RangeDomainFieldType, rangeDimDomain,
+                  RangeRangeFieldType, rangeDimRange, rangeDimRangeCols >             AffineFunctionType;
   typedef typename AffineFunctionType::MatrixType                                     MatrixType;
   typedef typename AffineFunctionType::LocalfunctionType                              AffineLocalfunctionType;
 
@@ -529,9 +532,9 @@ private:
     : public LocalfunctionType
   {
   public:
-    Localfunction(const EntityType& ent, const AffineFunctionType& value)
+    Localfunction(const EntityType& ent, const std::shared_ptr< const AffineFunctionType >& value)
       : LocalfunctionType(ent)
-      , value_(std::make_shared< AffineFunctionType >(value))
+      , value_(value)
     {}
 
     Localfunction(const Localfunction& /*other*/) = delete;
@@ -540,7 +543,7 @@ private:
 
     virtual size_t order() const override
     {
-      return 10;
+      return 1;
     }
 
     virtual void evaluate(const DomainType& /*xx*/, std::shared_ptr< const RangeType >& ret) const override
@@ -600,7 +603,8 @@ public:
     for (size_t ii = 0; ii < num_values; ++ii) {
       const MatrixType A_ii = cfg.get< MatrixType >("A." + DSC::toString(ii), rangeDimRange, rangeDimDomain);
       const RangeRangeType b_ii = cfg.get< RangeRangeType >("b." + DSC::toString(ii), rangeDimRange);
-      values.emplace_back(AffineFunctionType(A_ii, b_ii));
+      const bool sparse_ii = cfg.get< bool >("sparse." + DSC::toString(ii), false);
+      values.emplace_back(AffineFunctionType(A_ii, b_ii, sparse_ii));
     }
     // create
     return Common::make_unique< ThisType >(
@@ -621,9 +625,11 @@ public:
     : lowerLeft_(new Common::FieldVector< DomainFieldType, dimDomain >(lowerLeft))
     , upperRight_(new Common::FieldVector< DomainFieldType, dimDomain >(upperRight))
     , numElements_(new Common::FieldVector< size_t, dimDomain >(numElements))
-    , values_(new std::vector< AffineFunctionType >(values))
     , name_(nm)
   {
+    for (size_t ii = 0; ii < values.size(); ++ii)
+      values_.emplace_back(new AffineFunctionType(values[ii]));
+#ifndef NDEBUG
     // checks
     size_t totalSubdomains = 1;
     for (size_t dd = 0; dd < dimDomain; ++dd) {
@@ -634,10 +640,11 @@ public:
         DUNE_THROW(Dune::RangeError, "lowerLeft has to be elementwise smaller than upperRight!");
       totalSubdomains *= ne;
     }
-    if (values_->size() < totalSubdomains)
+    if (values_.size() < totalSubdomains)
       DUNE_THROW(Dune::RangeError,
-                 "values too small (is " << values_->size() << ", should be " << totalSubdomains << ")");
-  } // Checkerboard(...)
+                 "values too small (is " << values_.size() << ", should be " << totalSubdomains << ")");
+#endif //NDEBUG
+  } // AffineCheckerboard(...)
 
   AffineCheckerboard(const ThisType& other) = default;
 
@@ -657,34 +664,38 @@ public:
 
   virtual std::unique_ptr< LocalfunctionType > local_global_function(const EntityType& entity) const override
   {
-    // decide on the subdomain the center of the entity belongs to
-    const auto center = entity.geometry().center();
-    std::vector< size_t > whichPartition(dimDomain, 0);
-    const auto& ll = *lowerLeft_;
-    const auto& ur = *upperRight_;
-    const auto& ne = *numElements_;
-    for (size_t dd = 0; dd < dimDomain; ++dd) {
-      // for points that are on upperRight_[d], this selects one partition too much
-      // so we need to cap this
-      whichPartition[dd] = std::min(size_t(std::floor(ne[dd]*((center[dd] - ll[dd])/(ur[dd] - ll[dd])))),
-                                    ne[dd] - 1);
+    if (values_.size() == 1)
+      return DSC::make_unique< Localfunction >(entity, values_[0]);
+    else {
+      // decide on the subdomain the center of the entity belongs to
+      const auto center = entity.geometry().center();
+      std::vector< size_t > whichPartition(dimDomain, 0);
+      const auto& ll = *lowerLeft_;
+      const auto& ur = *upperRight_;
+      const auto& ne = *numElements_;
+      for (size_t dd = 0; dd < dimDomain; ++dd) {
+        // for points that are on upperRight_[d], this selects one partition too much
+        // so we need to cap this
+        whichPartition[dd] = std::min(size_t(std::floor(ne[dd]*((center[dd] - ll[dd])/(ur[dd] - ll[dd])))),
+                                      ne[dd] - 1);
+      }
+      size_t subdomain = 0;
+      if (dimDomain == 1)
+        subdomain = whichPartition[0];
+      else if (dimDomain == 2)
+        subdomain = whichPartition[0] + whichPartition[1]*ne[0];
+      else
+        subdomain = whichPartition[0] + whichPartition[1]*ne[0] + whichPartition[2]*ne[1]*ne[0];
+      // return the component that belongs to the subdomain
+      return DSC::make_unique< Localfunction >(entity, values_[subdomain]);
     }
-    size_t subdomain = 0;
-    if (dimDomain == 1)
-      subdomain = whichPartition[0];
-    else if (dimDomain == 2)
-      subdomain = whichPartition[0] + whichPartition[1]*ne[0];
-    else
-      subdomain = whichPartition[0] + whichPartition[1]*ne[0] + whichPartition[2]*ne[1]*ne[0];
-    // return the component that belongs to the subdomain
-    return std::unique_ptr< Localfunction >(new Localfunction(entity, (*values_)[subdomain]));
   } // ... local_function(...)
 
 private:
   std::shared_ptr< const Common::FieldVector< DomainFieldType, dimDomain > > lowerLeft_;
   std::shared_ptr< const Common::FieldVector< DomainFieldType, dimDomain > > upperRight_;
   std::shared_ptr< const Common::FieldVector< size_t, dimDomain > > numElements_;
-  std::shared_ptr< const std::vector< AffineFunctionType > > values_;
+  std::vector< std::shared_ptr< const AffineFunctionType > > values_;
   std::string name_;
 }; // class AffineCheckerboard
 
