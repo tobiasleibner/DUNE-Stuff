@@ -82,7 +82,7 @@ public:
           cfg.get("name",  default_cfg.get< std::string >("name")));
   } // ... create(...)
 
-  explicit Affine(const MatrixType& matrix, const RangeType& vector = RangeType(0), const bool sparse = false, const std::string name_in = static_id())
+  explicit Affine(const MatrixType matrix, const RangeType vector = RangeType(0), const bool sparse = false, const std::string name_in = static_id())
     : A_(matrix)
     , b_(vector)
     , name_(name_in)
