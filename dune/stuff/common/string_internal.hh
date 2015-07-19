@@ -307,6 +307,18 @@ static inline
   return std::to_string(ss);
 }
 
+template< class T >
+static inline
+  typename std::enable_if< !is_vector< T >::value && !is_matrix< T > ::value, std::string >::type
+              to_string(const T& ss, const int precision, const bool fixed = true)
+{
+  std::ostringstream os;
+  if (fixed)
+    os << std::fixed;
+  os << std::setprecision(precision) << ss;
+  return os.str();
+}
+
 template <typename T>
 static inline std::string to_string(const std::complex<T>& val)
 {
@@ -318,6 +330,16 @@ static inline std::string to_string(const std::complex<T>& val)
   return os.str();
 }
 
+template< typename T >
+static inline std::string to_string(const std::complex<T>& val, const int precision, const bool fixed = true)
+{
+  std::stringstream os;
+  if (fixed)
+    os << std::fixed;
+  os << std::setprecision(precision) << std::real(val) << " + i" << std::imag(val);
+  return os.str();
+}
+
 template <int size>
 static inline std::string to_string(const Dune::bigunsignedint<size>& ss)
 {
@@ -326,17 +348,27 @@ static inline std::string to_string(const Dune::bigunsignedint<size>& ss)
   return os.str();
 }
 
-inline std::string to_string(const char* ss)
+template <int size>
+static inline std::string to_string(const Dune::bigunsignedint<size>& ss, const int precision, const bool fixed = true)
+{
+  std::stringstream os;
+  if (fixed)
+    os << std::fixed;
+  os << std::setprecision(precision) << ss;
+  return os.str();
+}
+
+inline std::string to_string(const char* ss, const int = 0, const bool = true)
 {
   return std::string(ss);
 }
 
-inline std::string to_string(char ss)
+inline std::string to_string(char ss, const int = 0, const bool = true)
 {
   return std::string(1, ss);
 }
 
-inline std::string to_string(const std::string ss)
+inline std::string to_string(const std::string ss, const int = 0, const bool = true)
 {
   return std::string(ss);
 }
@@ -351,6 +383,21 @@ static inline
     if (ii > 0)
       ret += " ";
     ret += to_string(vec[ii]);
+  }
+  ret += "]";
+  return ret;
+} // ... to_string(...)
+
+template< class V >
+static inline
+  typename std::enable_if< is_vector< V >::value, std::string >::type
+              to_string(const V& vec, const int precision, const bool fixed = true)
+{
+  std::string ret = "[";
+  for (auto ii : valueRange(vec.size())) {
+    if (ii > 0)
+      ret += " ";
+    ret += to_string(vec[ii], precision, fixed);
   }
   ret += "]";
   return ret;
@@ -374,6 +421,26 @@ static inline
   ret += "]";
   return ret;
 } // ... to_string(...)
+
+template< class M >
+static inline
+  typename std::enable_if< is_matrix< M >::value, std::string >::type
+              to_string(const M& mat, const int precision, const bool fixed = true)
+{
+  std::string ret = "[";
+  for (auto rr : valueRange(MatrixAbstraction< M >::rows(mat))) {
+    if (rr > 0)
+      ret += "; ";
+    for (auto cc : valueRange(MatrixAbstraction< M >::cols(mat))) {
+      if (cc > 0)
+        ret += " ";
+      ret += to_string(MatrixAbstraction< M >::get_entry(mat, rr, cc), precision, fixed);
+    }
+  }
+  ret += "]";
+  return ret;
+} // ... to_string(...)
+
 
 } // namespace internal
 } // namespace Common

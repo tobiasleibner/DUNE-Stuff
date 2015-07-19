@@ -101,6 +101,11 @@ static inline std::string toString(const T& ss)
   return internal::to_string(ss);
 }
 
+template < class T >
+static inline std::string toString(const T& ss, const int precision, const bool fixed = true)
+{
+  return internal::to_string(ss, precision, fixed);
+}
 
 /**
   \brief Returns a string of lengths t' whitespace (or whitespace chars).
