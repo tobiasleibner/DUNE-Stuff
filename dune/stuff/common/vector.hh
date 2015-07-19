@@ -151,6 +151,36 @@ struct VectorAbstraction< Dune::FieldVector< K, SIZE > >
   }
 };
 
+template< class T >
+struct VectorAbstraction< std::complex< T > >
+{
+  typedef std::complex< T > VectorType;
+  typedef std::complex< T > ScalarType;
+  typedef T RealType;
+  typedef ScalarType S;
+  typedef RealType   R;
+
+  static const bool is_vector = true;
+
+  static const bool has_static_size = true;
+
+  static const size_t static_size = 2u;
+
+  static inline VectorType create(const size_t /*sz*/)
+  {
+    return VectorType(0, 0);
+  }
+
+  static inline VectorType create(const size_t /*sz*/, const ScalarType& val)
+  {
+    return VectorType(val);
+  }
+  static inline VectorType create(const size_t /*sz*/, const RealType& val)
+  {
+    return VectorType(val, val);
+  }
+};
+
 template< class VectorType >
     typename std::enable_if< is_vector< VectorType >::value, VectorType >::type
 create(const size_t sz,
@@ -159,6 +189,20 @@ create(const size_t sz,
   return VectorAbstraction< VectorType >::create(sz, val);
 }
 
+template< class T >
+std::complex<T> create(const size_t sz,
+       const T& val = T(0))
+{
+  return VectorAbstraction< std::complex<T> >::create(sz, val);
+}
+
+template< class VectorType >
+    typename std::enable_if< std::is_arithmetic< VectorType >::value, VectorType >::type
+create(const size_t /*sz*/,
+       const typename VectorAbstraction< VectorType >::S& val = typename VectorAbstraction< VectorType >::S(0))
+{
+  return val;
+}
 
 } // namespace Common
 } // namespace Stuff
@@ -195,9 +239,9 @@ operator+(const L& left, const R& right)
 } // ... operator+(...)
 
 
-template< class V >
-    typename std::enable_if< Dune::Stuff::Common::is_vector< V >::value, std::ostream& >::type
-operator<<(std::ostream& out, const V& vec)
+template< class V, class CharType, class CharTraits >
+    typename std::enable_if< Dune::Stuff::Common::is_vector< V >::value, std::basic_ostream<CharType, CharTraits>& >::type
+operator<<(std::basic_ostream<CharType, CharTraits>& out, const V& vec)
 {
   if (vec.size() == 0)
     out << "[]";
