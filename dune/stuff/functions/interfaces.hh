@@ -1095,8 +1095,45 @@ public:
   {
     return "stuff.globalfunctionvaluedfunction";
   }
-
 }; // class GlobalFunctionValuedFunctionInterface
+
+template< class TimeIndependentFunctionImp,
+          class TimeFieldImp = double >
+class TimeDependentFunctionInterface
+{
+public:
+  typedef TimeIndependentFunctionImp                        TimeIndependentFunctionType;
+  typedef TimeFieldImp                                      TimeFieldType;
+
+  static const bool available = false;
+
+  virtual ~TimeDependentFunctionInterface() {}
+
+  static std::string static_id()
+  {
+    return "stuff.timedependentfunction";
+  }
+
+  /**
+   * \defgroup haveto ´´These methods have to be implemented.''
+   * @{
+   **/
+  virtual std::unique_ptr< TimeIndependentFunctionType > evaluate_at_time(const TimeFieldType t) const = 0;
+  /* @} */
+
+  /** \defgroup info ´´These methods should be implemented in order to identify the function.'' */
+  /* @{ */
+  virtual std::string type() const
+  {
+    return "stuff.timedependentfunction";
+  }
+
+  virtual std::string name() const
+  {
+    return "stuff.timedependentfunction";
+  }
+  /* @} */
+};
 
 
 

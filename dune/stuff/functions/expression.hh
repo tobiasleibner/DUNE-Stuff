@@ -398,26 +398,30 @@ template< class EntityImp,
           class RangeFieldImp, size_t rangeDim, size_t rangeDimCols,
           class TimeFieldImp = double >
 class TimeDependentExpression
+    : TimeDependentFunctionInterface< Expression< EntityImp,
+                                                  DomainFieldImp, domainDim,
+                                                  RangeFieldImp, rangeDim, rangeDimCols >,
+                                      TimeFieldImp >
 {
   typedef TimeDependentExpression< EntityImp,
                                    DomainFieldImp, domainDim,
                                    RangeFieldImp, rangeDim, rangeDimCols,
-                                   TimeFieldImp >                           ThisType;
+                                   TimeFieldImp >                                                ThisType;
+  typedef typename DS::TimeDependentFunctionInterface< Expression< EntityImp,
+                                                                   DomainFieldImp, domainDim,
+                                                                   RangeFieldImp, rangeDim, rangeDimCols >,
+                                                       TimeFieldImp >                            BaseType;
 
 public:
+  using typename BaseType::TimeIndependentFunctionType;
+  using typename BaseType::TimeFieldType;
+  static const size_t dimDomain = domainDim;
+  static const size_t dimRange = rangeDim;
+  static const size_t dimRangeCols = rangeDimCols;
   typedef Expression< EntityImp,
-                      DomainFieldImp, domainDim,
-                      RangeFieldImp, rangeDim, rangeDimCols >               ExpressionFunctionType;
-  typedef EntityImp                                                         EntityType;
-  typedef DomainFieldImp                                                    DomainFieldType;
-  static const size_t                                                       dimDomain = domainDim;
+                      DomainFieldImp, dimDomain,
+                      RangeFieldImp, dimRange, dimRangeCols >               ExpressionFunctionType;
   typedef typename ExpressionFunctionType::DomainType                       DomainType;
-  typedef RangeFieldImp                                                     RangeFieldType;
-  static const size_t                                                       dimRange = rangeDim;
-  static const size_t                                                       dimRangeCols = rangeDimCols;
-  typedef typename ExpressionFunctionType::RangeType                        RangeType;
-  typedef TimeFieldImp                                                      TimeFieldType;
-  typedef typename ExpressionFunctionType::JacobianRangeType                JacobianRangeType;
   typedef typename ExpressionFunctionType::ExpressionStringVectorType       ExpressionStringVectorType;
   typedef typename ExpressionFunctionType::GradientStringVectorType         GradientStringVectorType;
 
@@ -556,7 +560,7 @@ public:
     return order_;
   }
 
-  ExpressionFunctionType evaluate_at_time(const TimeFieldType t) const
+  virtual std::unique_ptr< TimeIndependentFunctionType > evaluate_at_time(const TimeFieldType t) const
   {
     ExpressionStringVectorType expressions_at_time_t;
     for (size_t rr = 0; rr < expressions_.size(); ++rr) {
@@ -573,7 +577,7 @@ public:
           replaceAll(gradients_at_time_t[cc][rr][ii], "t", DSC::toString(t));
       }
     }
-    return ExpressionFunctionType(variable_, expressions_at_time_t, order_, name_, gradients_at_time_t);
+    return DSC::make_unique< ExpressionFunctionType >(variable_, expressions_at_time_t, order_, name_, gradients_at_time_t);
   }
 
 private:
