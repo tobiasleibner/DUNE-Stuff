@@ -3,8 +3,8 @@
 // Copyright holders: Rene Milk, Felix Schindler
 // License: BSD 2-Clause License (http://opensource.org/licenses/BSD-2-Clause)
 
-#ifndef DUNE_STUFF_FUNCTION_CHECKERBOARD_HH
-#define DUNE_STUFF_FUNCTION_CHECKERBOARD_HH
+#ifndef DUNE_STUFF_FUNCTIONS_CHECKERBOARD_HH
+#define DUNE_STUFF_FUNCTIONS_CHECKERBOARD_HH
 
 #include <vector>
 #include <cmath>
@@ -700,8 +700,130 @@ private:
 }; // class AffineCheckerboard
 
 
+template< class GlobalFunctionValuedFunctionType >
+class LocalizableWrapper
+    : public LocalizableFunctionInterface< typename GlobalFunctionValuedFunctionType::EntityType,
+                                    typename GlobalFunctionValuedFunctionType::DomainFieldType,
+                                    GlobalFunctionValuedFunctionType::dimDomain,
+                                    typename GlobalFunctionValuedFunctionType::RangeRangeFieldType,
+                                    GlobalFunctionValuedFunctionType::rangeDimRange,
+                                    GlobalFunctionValuedFunctionType::rangeDimRangeCols >
+{
+  typedef LocalizableWrapper< GlobalFunctionValuedFunctionType >                                          ThisType;
+  typedef LocalizableFunctionInterface< typename GlobalFunctionValuedFunctionType::EntityType,
+                                        typename GlobalFunctionValuedFunctionType::DomainFieldType,
+                                        GlobalFunctionValuedFunctionType::dimDomain,
+                                        typename GlobalFunctionValuedFunctionType::RangeRangeFieldType,
+                                        GlobalFunctionValuedFunctionType::rangeDimRange,
+                                        GlobalFunctionValuedFunctionType::rangeDimRangeCols >             BaseType;
+  static_assert(std::is_base_of< GlobalFunctionValuedFunctionInterface
+                                        < typename GlobalFunctionValuedFunctionType::EntityType,
+                                          typename GlobalFunctionValuedFunctionType::DomainFieldType,
+                                          GlobalFunctionValuedFunctionType::dimDomain,
+                                          typename GlobalFunctionValuedFunctionType::RangeEntityType,
+                                          typename GlobalFunctionValuedFunctionType::RangeDomainFieldType,
+                                          GlobalFunctionValuedFunctionType::rangeDimDomain,
+                                          typename GlobalFunctionValuedFunctionType::RangeRangeFieldType,
+                                          GlobalFunctionValuedFunctionType::rangeDimRange,
+                                          GlobalFunctionValuedFunctionType::rangeDimRangeCols >,
+                                  GlobalFunctionValuedFunctionType >::value,
+                "GlobalFunctionValuedFunctionType has to be derived from GlobalFunctionValuedFunctionInterface");
+  static_assert(GlobalFunctionValuedFunctionType::dimDomain == GlobalFunctionValuedFunctionType::rangeDimDomain,
+                "This only makes sense if GlobalFunctionValuedFunctionType and GlobalFunctionValuedFunctionType::RangeType live on the same domain");
+  static_assert(std::is_same< typename GlobalFunctionValuedFunctionType::DomainFieldType,
+                              typename GlobalFunctionValuedFunctionType::RangeDomainFieldType >::value,
+                "This only makes sense if GlobalFunctionValuedFunctionType and GlobalFunctionValuedFunctionType::RangeType live on the same domain");
+public:
+  using typename BaseType::EntityType;
+  using typename BaseType::DomainFieldType;
+  using typename BaseType::DomainType;
+  using typename BaseType::RangeFieldType;
+  using typename BaseType::RangeType;
+  using typename BaseType::JacobianRangeType;
+  using BaseType::dimDomain;
+  using BaseType::dimRange;
+  using BaseType::dimRangeCols;
+
+  LocalizableWrapper(const GlobalFunctionValuedFunctionType& globalfunction_valued_function,
+                     const std::string nm = static_id())
+    : globalfunction_valued_function_(&globalfunction_valued_function)
+    , name_(nm)
+  {}
+
+  LocalizableWrapper(const ThisType& other) = default;
+
+  ThisType& operator=(const ThisType& other) = delete;
+
+  ThisType& operator=(ThisType&& source) = delete;
+
+  static std::string static_id()
+  {
+    return BaseType::static_id() + ".localizablewrapper";
+  }
+
+  virtual std::string type() const override
+  {
+    return BaseType::static_id() + ".localizablewrapper";
+  }
+
+  virtual std::string name() const override
+  {
+    return name_;
+  }
+
+private:
+  class Localfunction
+    : public LocalfunctionInterface< EntityType, DomainFieldType, dimDomain, RangeFieldType, dimRange, dimRangeCols >
+  {
+    typedef LocalfunctionInterface< EntityType, DomainFieldType, dimDomain, RangeFieldType, dimRange, dimRangeCols > BaseType;
+  public:
+    Localfunction(const EntityType& entity,
+                  const GlobalFunctionValuedFunctionType& globalfunction_valued_function)
+      : BaseType(entity)
+      , entity_(entity)
+      , local_global_function_(std::move(globalfunction_valued_function.local_global_function(entity_)))
+    {}
+
+    Localfunction(const Localfunction& /*other*/) = delete;
+
+    Localfunction& operator=(const Localfunction& /*other*/) = delete;
+
+    virtual size_t order() const override
+    {
+      return local_global_function_->order();
+    }
+
+    virtual void evaluate(const DomainType& xx, RangeType& ret) const override
+    {
+       local_global_function_->evaluate(xx)->evaluate(entity_.geometry().global(xx), ret);
+    }
+
+    virtual void jacobian(const DomainType& /*xx*/, JacobianRangeType& /*ret*/) const override
+    {
+      DUNE_THROW(Dune::NotImplemented, "");
+    }
+
+  private:
+    const EntityType& entity_;
+    const std::unique_ptr< typename GlobalFunctionValuedFunctionType::LocalfunctionType > local_global_function_;
+  }; // class Localfunction
+
+public:
+  using typename BaseType::LocalfunctionType;
+
+  virtual std::unique_ptr< LocalfunctionType > local_function(const EntityType& entity) const override
+  {
+     return DSC::make_unique< Localfunction >(entity, *globalfunction_valued_function_);
+  } // ... local_function(...)
+
+private:
+  const std::shared_ptr< const GlobalFunctionValuedFunctionType > globalfunction_valued_function_;
+  const std::string name_;
+}; // class LocalizableWrapper
+
+
 } // namespace Functions
 } // namespace Stuff
 } // namespace Dune
 
-#endif // DUNE_STUFF_FUNCTION_CHECKERBOARD_HH
+#endif // DUNE_STUFF_FUNCTIONS_CHECKERBOARD_HH
