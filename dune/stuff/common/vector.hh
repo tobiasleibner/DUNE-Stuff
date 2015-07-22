@@ -160,7 +160,7 @@ struct VectorAbstraction< std::complex< T > >
   typedef ScalarType S;
   typedef RealType   R;
 
-  static const bool is_vector = true;
+  static const bool is_vector = false;
 
   static const bool has_static_size = true;
 
@@ -189,11 +189,12 @@ create(const size_t sz,
   return VectorAbstraction< VectorType >::create(sz, val);
 }
 
-template< class T >
-std::complex<T> create(const size_t sz,
-       const T& val = T(0))
+template< class T, class SR >
+  typename std::enable_if< is_complex<T>::value, T >::type
+create(const size_t /*sz*/,
+       const SR& val = typename VectorAbstraction< T >::R(0))
 {
-  return VectorAbstraction< std::complex<T> >::create(sz, val);
+  return VectorAbstraction< T >::create(0, val);
 }
 
 template< class VectorType >
