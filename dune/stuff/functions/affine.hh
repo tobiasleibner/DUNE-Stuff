@@ -11,6 +11,7 @@
 #include <memory>
 
 #include <dune/stuff/common/configuration.hh>
+#include <dune/stuff/common/fvector.hh>
 #include <dune/stuff/la/container/pattern.hh>
 #include <dune/stuff/functions/constant.hh>
 
@@ -21,27 +22,25 @@ namespace Stuff {
 namespace Functions {
 
 /**
- * \brief Simple affine function of the form f(x) = A*x + b
+ * \brief Simple affine function of the form f(x) = A*x + b. For dimRangeCols > 1, there has to be a matrix A_i for
+ * every column.
  */
-template< class EntityImp, class DomainFieldImp, size_t domainDim, class RangeFieldImp, size_t rangeDim, size_t rangeDimCols = 1 >
+template< class EntityImp, class DomainFieldImp, size_t domainDim, class RangeFieldImp, size_t rangeDim, size_t rangeDimCols >
 class Affine
+  : public GlobalFunctionInterface< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, rangeDimCols >
 {
-  Affine() { static_assert(AlwaysFalse< EntityImp >::value, "Not available for rangeDimCols > 1!"); }
-};
-
-
-template< class EntityImp, class DomainFieldImp, size_t domainDim, class RangeFieldImp, size_t rangeDim >
-class Affine< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, 1 >
-  : public GlobalFunctionInterface< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, 1 >
-{
-  typedef GlobalFunctionInterface< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, 1 > BaseType;
-  typedef Affine< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, 1 >                  ThisType;
+  typedef GlobalFunctionInterface< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, rangeDimCols > BaseType;
+  typedef Affine< EntityImp, DomainFieldImp, domainDim, RangeFieldImp, rangeDim, rangeDimCols >                  ThisType;
 
 public:
-  typedef typename BaseType::DomainType                                     DomainType;
-  typedef typename BaseType::RangeType                                      RangeType;
-  typedef typename BaseType::JacobianRangeType                              JacobianRangeType;
-  typedef typename Dune::FieldMatrix< RangeFieldImp, rangeDim, domainDim >  MatrixType;
+  using typename BaseType::DomainType;
+  using typename BaseType::RangeFieldType;
+  using typename BaseType::RangeType;
+  using typename BaseType::JacobianRangeType;
+  using BaseType::dimDomain;
+  using BaseType::dimRange;
+  using BaseType::dimRangeCols;
+  typedef typename Dune::FieldMatrix< RangeFieldImp, dimRange, dimDomain >  MatrixType;
   typedef typename DS::LA::SparsityPatternDefault                           PatternType;
 
   using typename BaseType::LocalfunctionType;
@@ -75,24 +74,54 @@ public:
     // get correct config
     const Common::Configuration cfg = config.has_sub(sub_name) ? config.sub(sub_name) : config;
     const Common::Configuration default_cfg = default_config();
-    return Common::make_unique< ThisType >(
-          cfg.get("A", default_cfg.get< MatrixType >("A")),
-          cfg.get("b", default_cfg.get< RangeType >("b")),
-          cfg.get("sparse", default_cfg.get< bool >("sparse")),
-          cfg.get("name",  default_cfg.get< std::string >("name")));
+    Dune::FieldVector< MatrixType, dimRangeCols > A_vector;
+    std::vector< bool > sparse_vector(dimRangeCols);
+    for (size_t cc = 0; cc < dimRangeCols; ++cc) {
+      if (cc == 0 && cfg.has_key("A")) {
+        A_vector[0] = cfg.get< MatrixType >("A", dimRange, dimDomain);
+        sparse_vector[0] = cfg.get< bool >("sparse", false);
+      } else {
+        A_vector[cc] = cfg.get< MatrixType >("A." + DSC::toString(cc), dimRange, dimDomain);
+        sparse_vector[cc] = cfg.get< bool >("sparse." + DSC::toString(cc), false);
+      }
+    }
+    return Common::make_unique< ThisType >(A_vector,
+                                           cfg.get< RangeType >("b"),
+                                           sparse_vector,
+                                           cfg.get("name",  default_cfg.get< std::string >("name")));
   } // ... create(...)
 
-  explicit Affine(const MatrixType matrix, const RangeType vector = RangeType(0), const bool sparse = false, const std::string name_in = static_id())
-    : A_(matrix)
-    , b_(vector)
+  // constructor
+  explicit Affine(const Dune::FieldVector< MatrixType, dimRangeCols > A,
+                  const RangeType b = RangeType(0),
+                  const std::vector< bool > sparse = std::vector< bool >(dimRangeCols, false),
+                  const std::string name_in = static_id())
+    : A_(A)
+    , b_(b)
     , name_(name_in)
-    , b_zero_(check_zero(b_))
+    , b_zero_(b_ == RangeType(0))
     , sparse_(sparse)
-    , pattern_(rangeDim)
+    , pattern_(rangeDimCols)
   {
-    if (sparse_)
-      calculate_pattern(A_, pattern_);
+    for (size_t ii = 0; ii < dimRangeCols; ++ii) {
+      if (sparse_[ii])
+        calculate_pattern(A_[ii], pattern_[ii]);
+    }
   }
+
+  // constructor for dimRangeCols = 1
+  explicit Affine(const MatrixType A,
+                  const RangeType b = RangeType(0),
+                  const bool sparse = false,
+                  const std::string name_in = static_id())
+    : Affine(Dune::FieldVector< MatrixType, dimRangeCols >(A),
+             b,
+             sparse,
+             name_in)
+  {
+    static_assert(dimRangeCols == 1, "Use constructor above for dimRangeCols > 1");
+  }
+
 
   Affine(const ThisType& other) = default;
 
@@ -108,19 +137,7 @@ public:
 
   virtual void evaluate(const DomainType& x, RangeType& ret) const override final
   {
-    if (sparse_) {
-      std::fill(ret.begin(), ret.end(), RangeFieldImp(0));
-      for (size_t ii = 0; ii < rangeDim; ++ii) {
-        const auto& row_pattern = pattern_.inner(ii);
-        for (const auto& jj : row_pattern) {
-          ret[ii] += A_[ii][jj]*x[jj];
-        }
-      }
-    } else {
-      A_.mv(x, ret);
-    }
-    if (!b_zero_)
-      ret += b_;
+    evaluate_helper(x, ret, internal::ChooseVariant< dimRangeCols >());
   }
 
   virtual void jacobian(const DomainType& /*x*/, JacobianRangeType& ret) const override final
@@ -133,14 +150,7 @@ public:
     return name_;
   }
 
-  static bool check_zero(const RangeType& b)
-  {
-    for (const auto& entry : b) {
-      if (DSC::FloatCmp::ne(entry, RangeFieldImp(0)))
-        return false;
-    }
-    return true;
-  }
+private:
 
   static void calculate_pattern(const MatrixType& A, PatternType& pattern)
   {
@@ -153,12 +163,51 @@ public:
     }
   }
 
-private:
-  const MatrixType A_;
+  template< size_t rC >
+  void evaluate_helper(const DomainType& x, RangeType& ret, const internal::ChooseVariant< rC >) const
+  {
+    for (size_t cc = 0; cc < rC; ++ cc) {
+      if (sparse_[cc]) {
+        std::fill(ret.begin(), ret.end(), 0);
+        for (size_t ii = 0; ii < dimRange; ++ii) {
+          const auto& row_pattern = pattern_[cc].inner(ii);
+          for (const auto& jj : row_pattern) {
+            ret[ii][cc] += A_[cc][ii][jj]*x[jj];
+          }
+        }
+      } else {
+        DSC::FieldVector< RangeFieldType, dimRange > tmp_col;
+        A_[cc].mv(x, tmp_col);
+        for (size_t rr = 0; rr < dimRange; ++rr)
+          ret[rr][cc] = tmp_col[rr];
+      }
+      if (!b_zero_)
+        ret += b_;
+    }
+  }
+
+  void evaluate_helper(const DomainType& x, RangeType& ret, const internal::ChooseVariant< 1 >) const
+  {
+    if (sparse_[0]) {
+      std::fill(ret.begin(), ret.end(), 0);
+      for (size_t ii = 0; ii < dimRange; ++ii) {
+        const auto& row_pattern = pattern_[0].inner(ii);
+        for (const auto& jj : row_pattern) {
+          ret[ii] += A_[0][ii][jj]*x[jj];
+        }
+      }
+    } else {
+      A_[0].mv(x, ret);
+    }
+    if (!b_zero_)
+      ret += b_;
+  }
+
+  const Dune::FieldVector< MatrixType, dimRangeCols > A_;
   const RangeType b_;
   const bool b_zero_;
-  const bool sparse_;
-  PatternType pattern_;
+  const std::vector< bool > sparse_;
+  std::vector< PatternType > pattern_;
   const std::string name_;
 };
 
