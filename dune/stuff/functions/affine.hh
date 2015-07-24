@@ -101,7 +101,7 @@ public:
     , name_(name_in)
     , b_zero_(b_ == RangeType(0))
     , sparse_(sparse)
-    , pattern_(rangeDimCols)
+    , pattern_(rangeDimCols, PatternType(dimRange))
   {
     for (size_t ii = 0; ii < dimRangeCols; ++ii) {
       if (sparse_[ii])
@@ -109,14 +109,14 @@ public:
     }
   }
 
-  // constructor for dimRangeCols = 1
+  // constructor for dimRangeCols = 1.
   explicit Affine(const MatrixType A,
                   const RangeType b = RangeType(0),
                   const bool sparse = false,
                   const std::string name_in = static_id())
     : Affine(Dune::FieldVector< MatrixType, dimRangeCols >(A),
              b,
-             sparse,
+             std::vector< bool >(dimRangeCols, sparse),
              name_in)
   {
     static_assert(dimRangeCols == 1, "Use constructor above for dimRangeCols > 1");
@@ -154,9 +154,9 @@ private:
 
   static void calculate_pattern(const MatrixType& A, PatternType& pattern)
   {
-    for (size_t ii = 0; ii < rangeDim; ++ii) {
+    for (size_t ii = 0; ii < dimRange; ++ii) {
       const auto& row = A[ii];
-      for (size_t jj = 0; jj < domainDim; ++jj) {
+      for (size_t jj = 0; jj < dimDomain; ++jj) {
         if (DSC::FloatCmp::ne(row[jj], RangeFieldImp(0)))
           pattern.insert(ii,jj);
       }
