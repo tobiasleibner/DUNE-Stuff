@@ -44,7 +44,7 @@ struct GeneralLocalfunctionChooser {
     Localfunction(const EntityType& entity,
                   const InnerType& inner_function,
                   const OuterType& outer_function,
-                  typename DSG::EntityInlevelSearch< OuterGridViewType >& entity_search)
+                  typename DS::PerThreadValue< typename DSG::EntityInlevelSearch< OuterGridViewType > >& entity_search)
       : BaseType(entity)
       , inner_function_(inner_function)
       , outer_function_(outer_function)
@@ -66,7 +66,7 @@ struct GeneralLocalfunctionChooser {
       // evaluate inner function
       const auto inner_value = inner_function_.local_function(entity_)->evaluate(xx);
       // find entity on outer grid the value of inner function belongs to
-      const auto entity_ptr_ptrs = entity_search_(std::vector< typename OuterType::DomainType >(1, inner_value));
+      const auto entity_ptr_ptrs = (*entity_search_)(std::vector< typename OuterType::DomainType >(1, inner_value));
       const auto& entity_ptr_ptr = entity_ptr_ptrs.at(0);
       if (entity_ptr_ptr == nullptr)
         DUNE_THROW(Dune::InvalidStateException,
@@ -84,7 +84,7 @@ struct GeneralLocalfunctionChooser {
   private:
     const InnerType& inner_function_;
     const OuterType& outer_function_;
-    typename DSG::EntityInlevelSearch< OuterGridViewType >& entity_search_;
+    typename DS::PerThreadValue< typename DSG::EntityInlevelSearch< OuterGridViewType > >& entity_search_;
     const EntityType& entity_;
   }; // class Localfunction
 
@@ -116,7 +116,7 @@ struct LocalfunctionForGlobalChooser {
     Localfunction(const EntityType& entity,
                   const InnerType& localizable_function,
                   const OuterType& global_function,
-                  const typename DSG::EntityInlevelSearch< OuterGridViewType >& /*entity_search*/)
+                  const typename DS::PerThreadValue< typename DSG::EntityInlevelSearch< OuterGridViewType > >& /*entity_search*/)
       : BaseType(entity)
       , localizable_function_(localizable_function)
       , global_function_(global_function)
@@ -216,7 +216,7 @@ public:
               const std::string nm = static_id())
     : inner_function_(inner_function)
     , outer_function_(outer_function)
-    , entity_search_(DSC::make_unique< typename DSG::EntityInlevelSearch< OuterGridViewType > >(outer_grid_view))
+    , entity_search_(typename DSG::EntityInlevelSearch< OuterGridViewType >(outer_grid_view))
     , name_(nm)
   {}
 
@@ -256,13 +256,13 @@ public:
 
   virtual std::unique_ptr< LocalfunctionType > local_function(const EntityType& entity) const override
   {
-     return DSC::make_unique< Localfunction >(entity, inner_function_, outer_function_, *entity_search_);
+     return DSC::make_unique< Localfunction >(entity, inner_function_, outer_function_, entity_search_);
   } // ... local_function(...)
 
 private:
   const InnerType inner_function_;
   const OuterType outer_function_;
-  std::unique_ptr< typename DSG::EntityInlevelSearch< OuterGridViewType > > entity_search_;
+  mutable typename DS::PerThreadValue< typename DSG::EntityInlevelSearch< OuterGridViewType > > entity_search_;
   std::string name_;
 }; // class Composition
 
