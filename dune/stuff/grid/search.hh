@@ -56,9 +56,9 @@ public:
 private:
   inline typename EntityPointerVectorType::value_type check_add(const typename BaseType::EntityType& entity,
                         const typename BaseType::GlobalCoordinateType& point) const {
-    const auto& geometry = entity.geometry();
-    const auto& refElement = DSG::reference_element(geometry);
-    if(refElement.checkInside(geometry.local(point)))
+//    const auto& geometry = entity.geometry();
+//    const auto& refElement = DSG::reference_element(geometry);
+    if (refElement_.checkInside(entity.geometry().local(point)))
     {
       return DSC::make_unique<typename BaseType::EntityType::EntityPointer>(entity);
     }
@@ -69,6 +69,7 @@ public:
   EntityInlevelSearch(const GridViewType& gridview)
     : gridview_(gridview)
     , it_last_(gridview_.template begin< 0 >())
+    , refElement_(DSG::reference_element(it_last_->geometry()))
   {}
 
   template < class PointContainerType >
@@ -114,6 +115,7 @@ public:
 private:
   const GridViewType gridview_;
   IteratorType it_last_;
+  decltype(DSG::reference_element(it_last_->geometry())) refElement_;
 }; // class EntityInlevelSearch
 
 

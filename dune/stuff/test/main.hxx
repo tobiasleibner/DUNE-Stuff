@@ -82,6 +82,14 @@ unsigned int
 
 int main(int argc, char** argv)
 {
+  size_t num_threads;
+  if (argc >= 3 && std::string(argv[1]) == "-threading.max_count") {
+    num_threads = DSC::fromString< size_t >(argv[2]); // Increment 'i' so we don't get the argument as the next argv[i].
+    DSC_CONFIG.set("threading.max_count", DSC::toString(num_threads));
+  } else {
+    std::cerr << "Usage: " << argv[0] << "-threading.max_count THREADS" << std::endl;
+  }
+
 #if DUNE_STUFF_TEST_MAIN_CATCH_EXCEPTIONS
   try {
 #endif
