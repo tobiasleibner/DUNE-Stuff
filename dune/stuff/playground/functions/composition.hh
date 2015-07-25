@@ -58,7 +58,7 @@ struct GeneralLocalfunctionChooser {
 
     virtual size_t order() const override
     {
-      return 10*inner_function_.local_function(entity_)->order();
+      return 2;
     }
 
     virtual void evaluate(const DomainType& xx, RangeType& ret) const override
