@@ -203,12 +203,12 @@ private:
       ret += b_;
   }
 
-  const Dune::FieldVector< MatrixType, dimRangeCols > A_;
-  const RangeType b_;
-  const bool b_zero_;
-  const std::vector< bool > sparse_;
+  Dune::FieldVector< MatrixType, dimRangeCols > A_;
+  RangeType b_;
+  bool b_zero_;
+  std::vector< bool > sparse_;
   std::vector< PatternType > pattern_;
-  const std::string name_;
+  std::string name_;
 };
 
 
