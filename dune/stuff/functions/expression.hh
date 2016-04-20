@@ -176,7 +176,15 @@ public:
     build_gradients(variable, gradient_expressions);
   }
 
-  Expression(const ThisType& other) = default;
+  Expression(const ThisType& other)
+    : function_(other.function_)
+    , order_(other.order_)
+    , name_(other.name_)
+    , tmp_vector_(other.tmp_vector_)
+    , tmp_row_(other.tmp_row_)
+    , gradients_(other.gradients_)
+  {
+  }
 
   ThisType& operator=(const ThisType& other)
   {
