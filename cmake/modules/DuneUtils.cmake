@@ -126,6 +126,7 @@ macro(BEGIN_TESTCASES)
                    --gtest_output=xml:${CMAKE_CURRENT_BINARY_DIR}/test_${testname}.xml )
     # currently property seems to have no effect
     set_tests_properties(test_${testname} PROPERTIES TIMEOUT ${DUNE_TEST_TIMEOUT})
+    target_compile_options(test_${testname} PUBLIC -ftemplate-depth=1000)
 		list(APPEND testnames test_${testname} )
 	endforeach( source )
 endmacro(BEGIN_TESTCASES)
