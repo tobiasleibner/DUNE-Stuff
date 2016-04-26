@@ -467,6 +467,17 @@ public:
     : backend_(backend_ptr)
   {}
 
+  template< int ROWS, int COLS >
+  explicit operator Dune::FieldMatrix< ScalarType, ROWS, COLS >() const
+  {
+    assert(ROWS == num_rows_ && COLS == num_cols_);
+    Dune::FieldMatrix< ScalarType, ROWS, COLS > ret(ScalarType(0));
+    for (size_t rr = 0; rr < ROWS; ++rr)
+      for (size_t cc = 0; cc < COLS; ++cc)
+        ret[rr][cc] = this->get_entry(rr,cc);
+    return ret;
+  }
+
   ThisType& operator=(const ThisType& other)
   {
     backend_ = other.backend_;
