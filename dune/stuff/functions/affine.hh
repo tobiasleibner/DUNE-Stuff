@@ -42,6 +42,7 @@ public:
   using BaseType::dimRange;
   using BaseType::dimRangeCols;
   typedef typename Dune::Stuff::LA::CommonSparseMatrix<RangeFieldType> MatrixType;
+  typedef typename Dune::Stuff::LA::EigenRowMajorSparseMatrix<RangeFieldType> EigenMatrixType;
   typedef typename Dune::FieldMatrix<RangeFieldType, dimRange, dimDomain> FieldMatrixType;
 
   using typename BaseType::LocalfunctionType;
@@ -91,11 +92,21 @@ public:
                   const RangeType b = RangeType(0),
                   const std::string name_in = static_id())
     : A_(A)
+    , A_eigen_(dimRangeCols)
     , b_(b)
     , name_(name_in)
     , b_zero_(DSC::FloatCmp::eq(b_, RangeType(0)))
   {
     assert(A.size() >= dimRangeCols);
+    for (size_t cc = 0; cc < dimRangeCols; ++cc) {
+      const auto pattern = A_[cc].pattern();
+      A_eigen_[cc] = EigenMatrixType(dimRange, dimDomain, pattern);
+      for (size_t ii = 0; ii < dimRange; ++ii) {
+        const auto& row_pattern = pattern.inner(ii);
+        for (const auto& jj : row_pattern)
+          A_eigen_[cc].set_entry(ii,jj, A_[cc].get_entry(ii,jj));
+      }
+    }
   }
 
   explicit Affine(const Dune::FieldVector< FieldMatrixType, dimRangeCols> A,
@@ -103,12 +114,21 @@ public:
                   const bool prune = true,
                   const std::string name_in = static_id())
     : A_(A.size())
+    , A_eigen_(dimRangeCols)
     , b_(b)
     , name_(name_in)
     , b_zero_(DSC::FloatCmp::eq(b_, RangeType(0)))
   {
-    for (size_t cc = 0; cc < dimRangeCols; ++cc)
+    for (size_t cc = 0; cc < dimRangeCols; ++cc) {
       A_[cc] = MatrixType(A[cc], prune);
+      const auto pattern = A_[cc].pattern();
+      A_eigen_[cc] = EigenMatrixType(dimRange, dimDomain, pattern);
+      for (size_t ii = 0; ii < dimRange; ++ii) {
+        const auto& row_pattern = pattern.inner(ii);
+        for (const auto& jj : row_pattern)
+          A_eigen_[cc].set_entry(ii,jj, A_[cc].get_entry(ii,jj));
+      }
+    }
   }
 
   // constructor for dimRangeCols = 1.
@@ -127,6 +147,7 @@ public:
   ThisType& operator=(const ThisType& other)
   {
     A_ = other.A_;
+    A_eigen_ = other.A_eigen_;
     b_ = other.b_;
     b_zero_ = other.b_zero_;
     name_ = other.name_;
@@ -158,11 +179,14 @@ private:
   template< size_t rC >
   void evaluate_helper(const DomainType& x, RangeType& ret, const internal::ChooseVariant< rC >) const
   {
-    for (size_t cc = 0; cc < rC; ++cc) {
-    Dune::FieldVector< RangeFieldType, dimRange > tmp_col;
-    A_[cc].mv(x, tmp_col);
-    for (size_t rr = 0; rr < dimRange; ++rr)
-      ret[rr][cc] = tmp_col[rr];
+    Dune::Stuff::LA::EigenDenseVector< RangeFieldType > tmp_x(dimDomain);
+    for (size_t ii = 0; ii < dimDomain; ++ii)
+      tmp_x[ii] = x[ii];
+    for (size_t cc = 0; cc < dimRangeCols; ++cc) {
+      Dune::Stuff::LA::EigenDenseVector< RangeFieldType > tmp_col(dimRange, RangeFieldType(0));
+      A_eigen_[cc].mv(tmp_x, tmp_col);
+      for (size_t rr = 0; rr < dimRange; ++rr)
+        ret[rr][cc] = tmp_col[rr];
     }
     if (!b_zero_)
       ret += b_;
@@ -170,7 +194,13 @@ private:
 
   void evaluate_helper(const DomainType& x, RangeType& ret, const internal::ChooseVariant< 1 >) const
   {
-    A_[0].mv(x, ret);
+    Dune::Stuff::LA::EigenDenseVector< RangeFieldType > tmp_col(dimRange, RangeFieldType(0));
+    Dune::Stuff::LA::EigenDenseVector< RangeFieldType > tmp_x(dimDomain);
+    for (size_t ii = 0; ii < dimDomain; ++ii)
+      tmp_x[ii] = x[ii];
+    A_eigen_[0].mv(tmp_x, tmp_col);
+    for (size_t rr = 0; rr < dimRange; ++rr)
+      ret[rr] = tmp_col[rr];
     if (!b_zero_)
       ret += b_;
   }
@@ -188,6 +218,7 @@ private:
   }
 
   std::vector< MatrixType > A_;
+  std::vector< EigenMatrixType > A_eigen_;
   RangeType b_;
   bool b_zero_;
   std::string name_;
