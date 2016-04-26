@@ -74,9 +74,11 @@ public:
     std::vector<MatrixType> A_vector(dimRangeCols);
     for (size_t cc = 0; cc < dimRangeCols; ++cc) {
       if (cc == 0 && cfg.has_key("A")) {
-        A_vector[0] = cfg.get<MatrixType>("A", dimRange, dimDomain);
+        const auto dense_matrix = cfg.get<MatrixType>("A", dimRange, dimDomain);
+        A_vector[0] = dense_matrix.pruned();
       } else {
-        A_vector[cc] = cfg.get<MatrixType>("A." + DSC::to_string(cc), dimRange, dimDomain);
+        const auto dense_matrix = cfg.get<MatrixType>("A." + DSC::to_string(cc), dimRange, dimDomain);
+        A_vector[cc] = dense_matrix.pruned();
       }
     }
     return Common::make_unique<ThisType>(A_vector,
