@@ -724,8 +724,8 @@ public:
     : num_rows_(DSC::MatrixAbstraction< OtherMatrixType >::rows(mat))
     , num_cols_(DSC::MatrixAbstraction< OtherMatrixType >::cols(mat))
     , backend_(std::make_shared< BackendType >())
-    , row_pointers_(std::make_shared< BackendType >(num_rows_+1))
-    , column_indices_(std::make_shared< BackendType >())
+    , row_pointers_(std::make_shared< IndexVectorType >(num_rows_+1))
+    , column_indices_(std::make_shared< IndexVectorType >())
   {
       for (size_t rr = 0; rr < num_rows_; ++rr) {
         size_t num_nonzero_entries_in_row = 0;
@@ -903,7 +903,7 @@ public:
   {
     SparsityPatternDefault ret(num_rows_);
     for (size_t rr = 0; rr < num_rows_; ++rr) {
-      for (size_t kk = row_pointers_->operator[](rr+1); kk < row_pointers_->operator[](rr+1); ++kk) {
+      for (size_t kk = row_pointers_->operator[](rr); kk < row_pointers_->operator[](rr+1); ++kk) {
         const auto& val = backend_->operator[](kk);
         if (!prune || Common::FloatCmp::ne(val, ScalarType(0), eps))
           ret.insert(rr, column_indices_->operator[](kk));
