@@ -470,7 +470,7 @@ public:
   template< int ROWS, int COLS >
   explicit operator Dune::FieldMatrix< ScalarType, ROWS, COLS >() const
   {
-    assert(ROWS == num_rows_ && COLS == num_cols_);
+    assert(ROWS == rows() && COLS == cols());
     Dune::FieldMatrix< ScalarType, ROWS, COLS > ret(ScalarType(0));
     for (size_t rr = 0; rr < ROWS; ++rr)
       for (size_t cc = 0; cc < COLS; ++cc)
