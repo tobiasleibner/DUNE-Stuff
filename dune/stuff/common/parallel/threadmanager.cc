@@ -28,7 +28,6 @@
 size_t Dune::Stuff::ThreadManager::max_threads()
 {
   const auto threads = DSC_CONFIG_GET("threading.max_count", 1);
-  WITH_DUNE_FEM(assert(Dune::Fem::ThreadManager::maxThreads() == threads);)
 //  WITH_DUNE_FEM(assert(Dune::Fem::ThreadManager::maxThreads() == threads);)
   return threads;
 }
@@ -37,7 +36,6 @@ size_t Dune::Stuff::ThreadManager::current_threads()
 {
   const auto threads = max_threads();
 //  WITH_DUNE_FEM(assert(long(Dune::Fem::ThreadManager::currentThreads()) == long(threads));)
-  WITH_DUNE_FEM(assert(long(Dune::Fem::ThreadManager::currentThreads()) == long(threads));)
   return threads;
 }
 
