@@ -191,7 +191,7 @@ public:
 
   void walk(const bool use_tbb = false)
   {
-//#if DUNE_VERSION_NEWER(DUNE_COMMON,3,9) //EXADUNE
+#if HAVE_TBB
     if (use_tbb) {
       const auto num_partitions = DSC_CONFIG_GET("threading.partition_factor", 1u)
                                   * threadManager().current_threads();
@@ -199,9 +199,9 @@ public:
       this->walk(partitioning);
       return;
     }
-//#else
+#else
     const auto DUNE_UNUSED(no_warning_for_use_tbb) = use_tbb;
-//#endif
+#endif
     // prepare functors
     prepare();
 
